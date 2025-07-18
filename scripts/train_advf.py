@@ -29,20 +29,22 @@ def main():
         help="Quantization mode to use for the model.",
     )
     args.add_argument(
-        "--lib",
-        type=str,
-        default="peft",
-        choices=["peft", "adp"],
-        help="Library to use for PEFT methods.",
-    )
-    args.add_argument(
-        "--peft", type=str, default=None, help="PEFT method to use."
-    )
-    args.add_argument(
-        "--preload_peft_from",
+        "--adapter_path_list",
         type=str,
         default=None,
-        help="Path to the PEFT model to preload.",
+        help="Comma-separated list of adapter paths to load.",
+    )
+    args.add_argument(
+        "--target_adapter_path",
+        type=str,
+        default=None,
+        help="Path to the target adapter for AdvFusion.",
+    )
+    args.add_argument(
+        "--preload_advf_from",
+        type=str,
+        default=None,
+        help="Path to the AdvFusion adapter to preload.",
     )
 
     args.add_argument(

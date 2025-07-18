@@ -1,6 +1,15 @@
+import os
+from src.dataset.constants import TARGET_COLUMN, TEXT_COLUMN
+from src.evaluate.evaluate import calc_all_metrics
+
+import pprint
+
+
 def generate_raw_samples(
-    model, tokenizer, samples, input_column, target_column, batch_size=1
+    model, tokenizer, samples, batch_size=1, save_path=None
 ):
+    input_column = TEXT_COLUMN
+    target_column = TARGET_COLUMN
     if model.config.pad_token_id is None:
         print("Setting pad_token_id to eos_token_id")
         model.config.pad_token_id = tokenizer.eos_token_id
@@ -11,6 +20,8 @@ def generate_raw_samples(
     old_pad_side = tokenizer.padding_side
     tokenizer.padding_side = "left"
 
+    results = []
+
     batches = []
     for i in range(0, len(samples[input_column]), batch_size):
         batch = []
@@ -18,8 +29,6 @@ def generate_raw_samples(
             if i + j < len(samples[input_column]):
                 input = samples[input_column][i + j]
                 target = samples[target_column][i + j]
-                # input = input.replace(target, "")
-                input = f"{input}\nExplanation:\n"
                 batch.append((input, target))
         batches.append(batch)
 
@@ -34,7 +43,11 @@ def generate_raw_samples(
         generations = model.generate(
             input_ids=tokenized["input_ids"].to(model.device),
             attention_mask=tokenized["attention_mask"].to(model.device),
-            max_new_tokens=100,
+            max_new_tokens=256,
+            do_sample=False,
+            temperature=None,
+            top_k=None,
+            top_p=None,
         )
         prompt_length = len(tokenized["input_ids"][0])
         for i, gen in enumerate(generations):
@@ -45,12 +58,81 @@ def generate_raw_samples(
             print("-" * 20, f"Input text:\n{input}")
             print("-" * 20, f"Target text:\n{target}")
 
-            new_tokens = gen[prompt_length:]
-            generation = tokenizer.decode(new_tokens, skip_special_tokens=False)
+            new_tokens = gen
+            new_tokens = new_tokens[prompt_length:]
+            generation = tokenizer.decode(new_tokens, skip_special_tokens=True)
             print(
                 "-" * 20,
                 f"Generated text ({len(new_tokens)} tokens):\n{generation}\n",
             )
+
+            metrics = calc_all_metrics([generation], [target])
+            print("-" * 20, f"Metrics:")
+            for k, v in metrics.items():
+                try:
+                    print(f"{k}: {float(v):.5f}")
+                except:
+                    print(f"{k}: {v}")
+
+            numeric_metrics = {}
+            for k, v in metrics.items():
+                try:
+                    numeric_metrics[k] = float(v)
+                except:
+                    pass
+
+            results.append(
+                {
+                    "input": input,
+                    "target": target,
+                    "generation": generation,
+                    "metrics": numeric_metrics,
+                }
+            )
+
+    if len(results) == 0:
+        return
+
+    total_metrics = calc_all_metrics(
+        [r["generation"] for r in results],
+        [r["target"] for r in results],
+    )
+
+    averages = None
+    for res in results:
+        if averages is None:
+            averages = res["metrics"].copy()
+        else:
+            for k, v in res["metrics"].items():
+                averages[k] += v
+    if averages is not None:
+        for k in averages:
+            averages[k] /= len(results)
+        print("-" * 20, f"Averages:")
+        averages_str = ""
+        for k, v in averages.items():
+            try:
+                averages += f"{k}: {float(v):.5f}\n"
+            except:
+                averages_str += f"{k}: {v}\n"
+        print(averages_str)
+        if save_path is not None:
+            file_path = f"{save_path}_averages.txt"
+            with open(file_path, "w") as f:
+                f.write(averages_str)
+
+    print("-" * 20, f"Total metrics:")
+    total_metrics_str = ""
+    for k, v in total_metrics.items():
+        try:
+            total_metrics_str += f"{k}: {float(v):.5f}\n"
+        except:
+            total_metrics_str += f"{k}: {v}\n"
+    print(total_metrics_str)
+    if save_path is not None:
+        file_path = f"{save_path}_total_metrics.txt"
+        with open(file_path, "w") as f:
+            f.write(total_metrics_str)
 
     tokenizer.padding_side = old_pad_side
     return

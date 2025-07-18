@@ -9,7 +9,7 @@ from transformers.utils.quantization_config import BitsAndBytesConfig
 @dataclass
 class ModelCategoryClass:
     LLAMA3: str = "llama-3"
-    QWEN2_5: str = "qwen-2.5"
+    QWEN2_5: str = "qwen2.5"
     GEMMA: str = "gemma"
 
 
@@ -72,7 +72,14 @@ def init_model(
 
 def init_tokenizer(model_name_or_path, model):
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
-    tokenizer.pad_token = tokenizer.eos_token
+    if tokenizer.pad_token is None:
+        pad_token = tokenizer.eos_token
+        pad_token_id = tokenizer.convert_tokens_to_ids(pad_token)
+        tokenizer.pad_token = pad_token
+        assert tokenizer.pad_token_id == pad_token_id, (
+            f"Pad token ID mismatch: {tokenizer.pad_token_id} != {pad_token_id}"
+        )
+        print(f"Setting pad token to {tokenizer.pad_token} ({tokenizer.pad_token_id})")
     model.config.pad_token_id = tokenizer.pad_token_id
     # tokenizer.padding_side = "left"
     return tokenizer

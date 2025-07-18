@@ -1,16 +1,38 @@
-from itertools import chain
 import os
-from typing import Callable
 
 from datasets import DatasetDict, load_dataset
 from transformers.models.auto.tokenization_auto import AutoTokenizer
+from rich import print
+
+from src.dataset.custom_processors import RawPreprocessor, csn_processor
+from src.dataset.processors import (
+    get_group_text_preprocessor,
+    get_tokenizer_preprocessor,
+)
+
+
+def get_raw_preprocessor(
+    processor: RawPreprocessor,
+):
+    def preprocessor(examples):
+        return {
+            **examples,
+            **processor(examples),
+        }
+
+    return preprocessor
 
 
 def load_raw_dataset(
     dataset_path: str,
+    raw_preprocessor: RawPreprocessor,
     train_file: str | None = None,
     test_file: str | float = 0.2,
     validation_file: str | float = 0.5,
+    max_train_samples: int | None = None,
+    max_validation_samples: int | None = None,
+    max_test_samples: int | None = None,
+    load_from_cache_file: bool = True,
 ):
     base_path = os.path.expanduser(dataset_path)
     if train_file is None:
@@ -41,13 +63,21 @@ def load_raw_dataset(
     raw_dataset = load_dataset("json", data_files=data_files)
     assert type(raw_dataset) is DatasetDict, "Dataset loading failed."
 
-    if "test" not in raw_dataset and isinstance(test_file, float):
-        print("Splitting train dataset into train and test sets.")
+    if (
+        "test" not in raw_dataset
+        and isinstance(test_file, float)
+        and test_file > 0
+    ):
+        print("DATASET: Splitting train dataset into test and validation sets.")
         raw_dataset = raw_dataset["train"].train_test_split(
             test_size=test_file, seed=42
         )
-    if "validation" not in raw_dataset and isinstance(validation_file, float):
-        print("Splitting test dataset into test and validation sets.")
+    if (
+        "validation" not in raw_dataset
+        and isinstance(validation_file, float)
+        and validation_file > 0
+    ):
+        print("DATASET: Splitting train dataset into validation and test sets.")
         temp_dataset = raw_dataset["test"].train_test_split(
             test_size=validation_file, seed=42
         )
@@ -58,161 +88,58 @@ def load_raw_dataset(
                 "validation": temp_dataset["test"],
             }
         )
+
+    for split in raw_dataset.keys():
+        length = len(raw_dataset[split])
+        print(f"DATASET: Loaded split '{split}' with {length:,} samples.")
+
+    if max_train_samples is not None:
+        raw_dataset["train"] = raw_dataset["train"].select(
+            range(min(max_train_samples, len(raw_dataset["train"])))
+        )
+    if max_validation_samples is not None and "validation" in raw_dataset:
+        raw_dataset["validation"] = raw_dataset["validation"].select(
+            range(min(max_validation_samples, len(raw_dataset["validation"])))
+        )
+    if max_test_samples is not None and "test" in raw_dataset:
+        raw_dataset["test"] = raw_dataset["test"].select(
+            range(min(max_test_samples, len(raw_dataset["test"])))
+        )
+
+    for split in raw_dataset.keys():
+        length = len(raw_dataset[split])
+        print(
+            f"DATASET: After limiting, split '{split}' has {length:,} samples."
+        )
+
+    for split, dataset in raw_dataset.items():
+        raw_dataset[split] = dataset.map(
+            get_raw_preprocessor(raw_preprocessor),
+            batched=True,
+            batch_size=32,
+            remove_columns=dataset.column_names,
+            load_from_cache_file=load_from_cache_file,
+        )
+        print(f"DATASET: columns: {raw_dataset[split].column_names}")
     return raw_dataset
-
-
-type ColumnJoiner = Callable[[str, str], str]
-TEXT_COLUMN = "TEXT"
-TARGET_COLUMN = "TARGET"
-TEXT_TOKENIZED_COLUMN = "input_ids"
-TEXT_ATTN_MASK_COLUMN = "attention_mask"
-TARGET_TOKENIZED_COLUMN = "TARGET_TOKENIZED"
-TARGET_ATTN_MASK_COLUMN = "TARGET_ATTN_MASK"
-
-
-def get_column_preprocessor(
-    text_column: str,
-    target_column: str | None = None,
-    join_text_target: ColumnJoiner | None = None,
-):
-    def preprocessor(examples):
-        texts, targets = [], []
-        for i in range(len(examples[text_column])):
-            text = examples[text_column][i]
-            target = None
-
-            if target_column is not None:
-                if join_text_target:
-                    # text = text.replace(examples[target_column][i], "")
-                    text = join_text_target(text, examples[target_column][i])
-                else:
-                    target = examples[target_column][i]
-
-            texts.append(text)
-            targets.append(target)
-
-        examples[TEXT_COLUMN] = texts
-        if target_column is not None and not join_text_target:
-            examples[TARGET_COLUMN] = targets
-
-        return examples
-
-    return preprocessor
-
-
-def get_tokenizer_preprocessor(
-    tokenizer,
-    truncate: bool = True,
-):
-    def preprocessor(examples):
-        new_examples = {}
-        if truncate:
-            text_tok = tokenizer(
-                [
-                    s + "\n" + tokenizer.eos_token
-                    for s in examples[TEXT_COLUMN]
-                ],
-                padding="longest",  # options: "longest", "max_length", "do_not_pad"
-                truncation=True,
-                max_length=256,
-            )
-        else:
-            text_tok = tokenizer(
-                [
-                    s + "\n" + tokenizer.eos_token
-                    for s in examples[TEXT_COLUMN]
-                ],
-                padding="do_not_pad",  # options: "longest", "max_length", "do_not_pad"
-                truncation=False,
-            )
-        new_examples[TEXT_TOKENIZED_COLUMN] = text_tok["input_ids"]
-        new_examples[TEXT_ATTN_MASK_COLUMN] = text_tok["attention_mask"]
-
-        if TARGET_COLUMN in examples:
-            target_tok = tokenizer(
-                examples[TARGET_COLUMN],
-                # truncation=True,
-                padding="do_not_pad",
-                # max_length=256,
-            )
-            new_examples[TARGET_TOKENIZED_COLUMN] = target_tok["input_ids"]
-            new_examples[TARGET_ATTN_MASK_COLUMN] = target_tok["attention_mask"]
-        return new_examples
-
-    return preprocessor
-
-
-def get_group_text_preprocessor(
-    block_size: int,
-    # padding,
-    # ignore_pad_token_for_loss=False,
-):
-    def preprocessor(examples):
-        keys = [
-            k
-            for k in [
-                TEXT_TOKENIZED_COLUMN,
-                TEXT_ATTN_MASK_COLUMN,
-                TARGET_TOKENIZED_COLUMN,
-                TARGET_ATTN_MASK_COLUMN,
-            ]
-            if k in examples.keys()
-        ]
-        concatenated_examples = {k: list(chain(*examples[k])) for k in keys}
-        total_length = len(concatenated_examples[keys[0]])
-        # We drop the small remainder, and if the total_length < block_size  we exclude this batch and return an empty dict.
-        # We could add padding if the model supported it instead of this drop, you can customize this part to your needs.
-        total_length = (total_length // block_size) * block_size
-        # Split by chunks of max_len.
-        result = {
-            k: [
-                t[i : i + block_size]
-                for i in range(0, total_length, block_size)
-            ]
-            for k, t in concatenated_examples.items()
-        }
-
-        # labels = result["input_ids"].copy()
-        # if padding == "max_length" and ignore_pad_token_for_loss:
-        #     labels = [
-        #         [(id if id != tokenizer.pad_token_id else -100) for id in label]
-        #         for label in labels
-        #     ]
-        # result["labels"] = labels
-
-        return result
-
-    return preprocessor
 
 
 def preprocess_dataset(
     raw_dataset: DatasetDict,
     split: str,
     tokenizer,
-    text_column: str,
-    target_column: str | None = None,
-    join_text_target: ColumnJoiner | None = None,
     max_sample_count: int | None = None,
     batch_size: int = 32,
+    only_completion: bool = False,
     chunk_size: int | None = 256,
+    text_max_length: int | None = 256,
+    target_max_length: int | None = 128,
+    load_from_cache_file=True,
 ):
     do_chunk_text = chunk_size is not None and chunk_size > 0
     if split not in raw_dataset:
         raise ValueError(f"Split '{split}' not found in the dataset.")
     dataset = raw_dataset[split]
-    if max_sample_count is not None:
-        max_sample_count = min(len(dataset), max_sample_count)
-        dataset = dataset.select(range(max_sample_count))
-
-    dataset = dataset.map(
-        get_column_preprocessor(
-            text_column=text_column,
-            target_column=target_column,
-            join_text_target=join_text_target,
-        ),
-        batched=True,
-        batch_size=batch_size,
-    )
 
     # print(dataset[0][text_column])
     # print(dataset[0].get(target_column, "No target column"))
@@ -220,7 +147,13 @@ def preprocess_dataset(
     # print(dataset[0].get("TARGET", "No TARGET column"))
 
     dataset = dataset.map(
-        get_tokenizer_preprocessor(tokenizer, truncate=not do_chunk_text),
+        get_tokenizer_preprocessor(
+            tokenizer,
+            truncate=not do_chunk_text,
+            text_max_length=text_max_length,
+            target_max_length=target_max_length,
+            only_completion=only_completion,
+        ),
         batched=True,
         batch_size=batch_size,
         remove_columns=[
@@ -228,81 +161,137 @@ def preprocess_dataset(
             for k in dataset.column_names
             if k
             not in [
-                TEXT_TOKENIZED_COLUMN,
-                TEXT_ATTN_MASK_COLUMN,
-                TARGET_TOKENIZED_COLUMN,
-                TARGET_ATTN_MASK_COLUMN,
+                "input_ids",
+                "attention_mask",
+                "labels",
             ]
         ],
+        load_from_cache_file=load_from_cache_file,
     )
+    # print(f"Column names after preprocessing: {dataset.column_names}")
     # print(dataset[0:1])
     # print(f"Sample count after grouping: {len(dataset)}")
     for i in range(0):
         print(f"Example {i}:")
-        print(f"Token count: {len(dataset[i][TEXT_TOKENIZED_COLUMN])}")
-        print(
-            tokenizer.decode(
-                dataset[i][TEXT_TOKENIZED_COLUMN], skip_special_tokens=False
-            )
-        )
+        print(f"Token count: {len(dataset[i]["input_ids"])}")
+        for j in range(len(dataset[i]["input_ids"])):
+            id = dataset[i]["input_ids"][j]
+            token = tokenizer.decode(id, skip_special_tokens=False)
+            label = dataset[i]["labels"][j]
+            color = "green" if label != -100 else "red"
+            print(f"[{color}]{token}[/]", end="")
+        print()
 
     if do_chunk_text and chunk_size is not None:
         dataset = dataset.map(
             get_group_text_preprocessor(block_size=chunk_size),
             batched=True,
             batch_size=batch_size,
+            load_from_cache_file=load_from_cache_file,
         )
         # print(dataset[0:10])
         # print(f"Sample count after grouping: {len(dataset)}")
-        for i in range(4):
+        for i in range(0):
             print(f"Example {i}:")
-            print(f"Token count: {len(dataset[i][TEXT_TOKENIZED_COLUMN])}")
-            print(
-                tokenizer.decode(
-                    dataset[i][TEXT_TOKENIZED_COLUMN], skip_special_tokens=False
-                )
-            )
+            print(f"Token count: {len(dataset[i]["input_ids"])}")
+            for j in range(len(dataset[i]["input_ids"])):
+                id = dataset[i]["input_ids"][j]
+                token = tokenizer.decode(id, skip_special_tokens=False)
+                label = dataset[i]["labels"][j]
+                color = "green" if label != -100 else "red"
+                print(f"[{color}]{token}[/]", end="")
+        print()
 
+    if max_sample_count is not None:
+        max_sample_count = min(len(dataset), max_sample_count)
+        dataset = dataset.select(range(max_sample_count))
+    # print(
+    #     f"DATASET (PROCESSED): {split} column names after preprocessing: {dataset.column_names}"
+    # )
     total_token_count = sum(
-        len(dataset[i][TEXT_TOKENIZED_COLUMN]) for i in range(len(dataset))
+        sum([1 if label != -100 else 0 for label in dataset[i]["labels"]])
+        for i in range(len(dataset))
     )
-    print(f"{split} total token count: {total_token_count}")
+    print(
+        f"DATASET (PROCESSED): '{split}' total rows {len(dataset):,}, total token count: {total_token_count:,}"
+    )
 
     return dataset
 
 
+def pad_seq(
+    tokenizer,
+    sequences: list[str],
+    should_pad: bool = False,
+    max_length: int | None = None,
+    side: str = "right",
+):
+    if not should_pad:
+        return sequences
+    tokenized = tokenizer(
+        sequences,
+        padding="longest",
+        truncation=True,
+        max_length=max_length,
+        add_special_tokens=False,
+        padding_side=side,
+    )
+
+    return tokenizer.batch_decode(
+        tokenized["input_ids"], skip_special_tokens=True
+    )
+
+
 if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(
-        "/home/amirreza/projects/ai/models/llm/llama-3.2-3B"
+        "/home/amirreza/projects/ai/models/llm/codegemma-2b"
     )
-    tokenizer.pad_token = tokenizer.eos_token
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    special_tokens = tokenizer.special_tokens_map
+
+    print(special_tokens)
 
     dataset_name_or_path = "~/projects/ai/data/CodeSearchNet/python"
     # dataset_name_or_path = "~/projects/ai/data/spp_30k/SPP_30k_verified.jsonl"
+
     raw_dataset = load_raw_dataset(
         dataset_name_or_path,
+        raw_preprocessor=csn_processor,
         train_file="train.jsonl",
-        test_file="test.jsonl",
+        # test_file="test.jsonl",
         validation_file="valid.jsonl",
+        # test_file=50,
+        # validation_file=0,
+        max_train_samples=50,
+        max_validation_samples=5,
+        max_test_samples=100,
+        load_from_cache_file=False,
     )
-    print(raw_dataset)
-    print(raw_dataset["train"].column_names)
-
-    text_column = "code"
-    target_column = "docstring"
-
-    def join_text_target(text: str, target: str) -> str:
-        return f"{text}\nExplanation:\n{target}"
+    # print(raw_dataset)
+    # print(raw_dataset["train"].column_names)
+    # print(raw_dataset["train"][0][TEXT_COLUMN])
+    # print(raw_dataset["train"][0][TARGET_COLUMN])
 
     train_dataset = preprocess_dataset(
         raw_dataset,
         "train",
         tokenizer=tokenizer,
-        text_column=text_column,
-        target_column=target_column,
-        join_text_target=join_text_target,
-        max_sample_count=10,
+        # max_sample_count=50,
+        # only_completion=True,
         chunk_size=256,
+        load_from_cache_file=False,
     )
-
-    print(train_dataset.column_names)
+    # eval_dataset = preprocess_dataset(
+    #     raw_dataset,
+    #     "validation",
+    #     tokenizer=tokenizer,
+    #     max_sample_count=1,
+    #     only_completion=True,
+    #     chunk_size=512,
+    #     text_max_length=256,
+    #     target_max_length=256,
+    #     # batch_size=1,
+    #     load_from_cache_file=False,
+    # )

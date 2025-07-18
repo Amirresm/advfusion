@@ -1,8 +1,12 @@
 from typing import Literal
 import adapters
 from adapters.trainer import TrainingArguments
-from transformers.data.data_collator import DataCollatorForLanguageModeling
+from transformers.data.data_collator import (
+    DataCollatorForLanguageModeling,
+    DefaultDataCollator,
+)
 from transformers.trainer import Trainer
+from transformers.trainer_callback import ProgressCallback
 
 
 def get_trainer(
@@ -18,10 +22,10 @@ def get_trainer(
     logging_steps=100,
     eval_steps=500,
 ):
-    data_collator = DataCollatorForLanguageModeling(
-        tokenizer=tokenizer,
-        mlm=False,
-    )
+    data_collator = DefaultDataCollator()
+
+    # callbacks = []
+
     train_args = TrainingArguments(
         output_dir=output_dir,
         per_device_train_batch_size=train_batch_size,
@@ -49,6 +53,7 @@ def get_trainer(
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=data_collator,
+        # callbacks=callbacks,
     )
 
     return trainer
