@@ -76,10 +76,19 @@ def init_tokenizer(model_name_or_path, model):
         pad_token = tokenizer.eos_token
         pad_token_id = tokenizer.convert_tokens_to_ids(pad_token)
         tokenizer.pad_token = pad_token
-        assert tokenizer.pad_token_id == pad_token_id, (
-            f"Pad token ID mismatch: {tokenizer.pad_token_id} != {pad_token_id}"
+        assert (
+            tokenizer.pad_token_id == pad_token_id
+        ), f"Pad token ID mismatch: {tokenizer.pad_token_id} != {pad_token_id}"
+        print(
+            f"Setting pad token to {tokenizer.pad_token} ({tokenizer.pad_token_id})"
         )
-        print(f"Setting pad token to {tokenizer.pad_token} ({tokenizer.pad_token_id})")
     model.config.pad_token_id = tokenizer.pad_token_id
-    # tokenizer.padding_side = "left"
+    print(
+        f"Tokenizer padding token: {tokenizer.pad_token} ({tokenizer.pad_token_id})"
+    )
+    print(f"Model padding token: {model.config.pad_token_id}")
+    print(
+        f"Tokenizer eos token: {tokenizer.eos_token} ({tokenizer.eos_token_id})"
+    )
+    print(f"Model eos token: {model.config.eos_token_id}")
     return tokenizer

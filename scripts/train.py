@@ -2,12 +2,12 @@ import argparse
 import os
 
 import torch
-from torch.amp.autocast_mode import autocast
 
 from src.dataset.custom_processors import csn_processor
 from src.generation.generation import generate_raw_samples
 from src.model.model import init_model, init_tokenizer
 from src.dataset.dataset import load_raw_dataset, preprocess_dataset
+from src.model.report import report_model
 from src.peft.configs import get_peft_config
 from src.peft.peft import load_peft, setup_for_peft
 from src.train.train import get_trainer
@@ -176,6 +176,8 @@ def main():
                 "Warning: Peft library is specified but no PEFT config is provided."
             )
 
+    report_model(model)
+
     train_dataset = preprocess_dataset(
         raw_dataset,
         "train",
@@ -212,9 +214,15 @@ def main():
         )
         trainer.train()
 
-        trainer.save_model()
+        save_path = os.path.join(args.output_dir, "adapter")
+        if args.lib == "adp":
+            model.save_adapter(
+                save_path, "adapter"
+            )
+        else:
+            model.save_pretrained(save_path)
 
-    with torch.no_grad(), autocast("cuda"), torch.inference_mode():
+    with torch.inference_mode():
         generate_raw_samples(
             model,
             tokenizer,

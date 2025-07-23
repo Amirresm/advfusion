@@ -2,14 +2,17 @@ import argparse
 import os
 
 import torch
-from torch.amp.autocast_mode import autocast
 
+from src.advfusion.advfusion import (
+    init_advfusion,
+    load_advfusion,
+    reload_advf_target_adapter,
+)
 from src.dataset.custom_processors import csn_processor
 from src.generation.generation import generate_raw_samples
 from src.model.model import init_model, init_tokenizer
 from src.dataset.dataset import load_raw_dataset, preprocess_dataset
-from src.peft.configs import get_peft_config
-from src.peft.peft import load_peft, setup_for_peft
+from src.model.report import report_model
 from src.train.train import get_trainer
 
 
@@ -109,6 +112,14 @@ def main():
 
     args = args.parse_args()
 
+    args.adapter_path_list = [
+        p
+        for p in (
+            args.adapter_path_list.split(",") if args.adapter_path_list else []
+        )
+        if p.strip()
+    ]
+
     try:
         args.validation_file = float(args.validation_file)
     except ValueError:
@@ -127,15 +138,6 @@ def main():
         quantization_mode=args.q,
     )
     tokenizer = init_tokenizer(args.model_name_or_path, model)
-
-    print(
-        f"Tokenizer padding token: {tokenizer.pad_token} ({tokenizer.pad_token_id})"
-    )
-    print(f"Model padding token: {model.config.pad_token_id}")
-    print(
-        f"Tokenizer eos token: {tokenizer.eos_token} ({tokenizer.eos_token_id})"
-    )
-    print(f"Model eos token: {model.config.eos_token_id}")
 
     raw_dataset = load_raw_dataset(
         args.dataset_name_or_path,
@@ -157,26 +159,24 @@ def main():
         save_path=os.path.join(args.output_dir, "pre_trained"),
     )
 
-    if args.lib is not None:
-        if args.preload_peft_from is not None:
-            print(f"Loading PEFT model from {args.preload_peft_from}")
-            peft_config = get_peft_config(args.peft, args.lib)
-            model = load_peft(
-                model,
-                peft_lib=args.lib,
-                peft_path=args.preload_peft_from,
-                config=peft_config,
-                dtype=model_dtype,
-            )
-        elif args.peft is not None:
-            peft_config = get_peft_config(args.peft, args.lib)
-            model = setup_for_peft(
-                model, args.lib, config=peft_config, dtype=model_dtype
-            )
-        else:
-            print(
-                "Warning: Peft library is specified but no PEFT config is provided."
-            )
+    if args.preload_advf_from is not None:
+        print(f"Loading AdvFusion model from {args.preload_advf_from}")
+        fusion_name = load_advfusion(
+            model,
+            adapter_path_list=args.adapter_path_list,
+            target_adapter_path=args.target_adapter_path,
+            preload_path=args.preload_advf_from,
+            dtype=model_dtype,
+        )
+    else:
+        fusion_name = init_advfusion(
+            model,
+            adapter_path_list=args.adapter_path_list,
+            target_adapter_path=args.target_adapter_path,
+            dtype=model_dtype,
+        )
+
+    report_model(model)
 
     train_dataset = preprocess_dataset(
         raw_dataset,
@@ -202,11 +202,11 @@ def main():
         trainer = get_trainer(
             model=model,
             tokenizer=tokenizer,
-            peft_lib=args.lib,
+            peft_lib="adp",
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
             output_dir=args.output_dir,
-            train_batch_size=4,
+            train_batch_size=2,
             eval_batch_size=4,
             epochs=1,
             logging_steps=100,
@@ -214,9 +214,46 @@ def main():
         )
         trainer.train()
 
-        trainer.save_model()
+        with torch.inference_mode():
+            generate_raw_samples(
+                model,
+                tokenizer,
+                raw_dataset["test"][: args.max_test_samples],
+                batch_size=4,
+                save_path=os.path.join(args.output_dir, "excluded"),
+            )
 
-    with torch.no_grad(), autocast("cuda"), torch.inference_mode():
+        reload_advf_target_adapter(
+            model,
+            target_adapter_path=args.target_adapter_path,
+            dtype=model_dtype,
+        )
+        model.train_adapter_fusion(fusion_name)
+        trainer.train()
+
+        # trainer.save_model()
+        # model.save_adapter_fusion(args.output_dir, fusion_name)
+        fusion_path = os.path.join(args.output_dir, "adapter_fusion")
+        model.save_adapter_setup(fusion_path, fusion_name)
+        # all_fusions_path = os.path.join(args.output_dir, "all_adapter_fusions")
+        # model.save_all_adapter_fusions(all_fusions_path)
+    else:
+        with torch.inference_mode():
+            generate_raw_samples(
+                model,
+                tokenizer,
+                raw_dataset["test"][: args.max_test_samples],
+                batch_size=4,
+                save_path=os.path.join(args.output_dir, "excluded"),
+            )
+
+        reload_advf_target_adapter(
+            model,
+            target_adapter_path=args.target_adapter_path,
+            dtype=model_dtype,
+        )
+
+    with torch.inference_mode():
         generate_raw_samples(
             model,
             tokenizer,

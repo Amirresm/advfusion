@@ -6,9 +6,25 @@ from rich import print
 
 from src.dataset.custom_processors import RawPreprocessor, csn_processor
 from src.dataset.processors import (
-    get_group_text_preprocessor,
-    get_tokenizer_preprocessor,
+    ChunkTextPreprocessor,
+    TokenizeTextPreprocessor,
 )
+
+
+def visualize_rows(tokenizer, rows):
+    for i in range(len(rows["input_ids"])):
+        input_ids = rows["input_ids"][i]
+        labels = rows["labels"][i]
+
+        print(f"Example {i}:")
+        print(f"Token count: {len(input_ids)}")
+        for j in range(len(input_ids)):
+            id = input_ids[j]
+            token = tokenizer.decode(id, skip_special_tokens=False)
+            label = labels[j]
+            color = "green" if label != -100 else "red"
+            print(f"[{color}]{token}[/]", end="")
+        print()
 
 
 def get_raw_preprocessor(
@@ -141,19 +157,15 @@ def preprocess_dataset(
         raise ValueError(f"Split '{split}' not found in the dataset.")
     dataset = raw_dataset[split]
 
-    # print(dataset[0][text_column])
-    # print(dataset[0].get(target_column, "No target column"))
-    # print(dataset[0].get("TEXT", "No TEXT column"))
-    # print(dataset[0].get("TARGET", "No TARGET column"))
-
+    tokenizer_preprocessor = TokenizeTextPreprocessor(
+        tokenizer,
+        truncate=not do_chunk_text,
+        text_max_length=text_max_length,
+        target_max_length=target_max_length,
+        only_completion=only_completion,
+    )
     dataset = dataset.map(
-        get_tokenizer_preprocessor(
-            tokenizer,
-            truncate=not do_chunk_text,
-            text_max_length=text_max_length,
-            target_max_length=target_max_length,
-            only_completion=only_completion,
-        ),
+        tokenizer_preprocessor.get_tokenizer_preprocessor(),
         batched=True,
         batch_size=batch_size,
         remove_columns=[
@@ -168,46 +180,23 @@ def preprocess_dataset(
         ],
         load_from_cache_file=load_from_cache_file,
     )
-    # print(f"Column names after preprocessing: {dataset.column_names}")
-    # print(dataset[0:1])
-    # print(f"Sample count after grouping: {len(dataset)}")
-    for i in range(0):
-        print(f"Example {i}:")
-        print(f"Token count: {len(dataset[i]["input_ids"])}")
-        for j in range(len(dataset[i]["input_ids"])):
-            id = dataset[i]["input_ids"][j]
-            token = tokenizer.decode(id, skip_special_tokens=False)
-            label = dataset[i]["labels"][j]
-            color = "green" if label != -100 else "red"
-            print(f"[{color}]{token}[/]", end="")
-        print()
+    # visualize_rows(tokenizer, dataset[:3])
 
     if do_chunk_text and chunk_size is not None:
+        chunk_text_preprocessor = ChunkTextPreprocessor(chunk_size)
         dataset = dataset.map(
-            get_group_text_preprocessor(block_size=chunk_size),
+            chunk_text_preprocessor.get_group_text_preprocessor(),
             batched=True,
             batch_size=batch_size,
             load_from_cache_file=load_from_cache_file,
         )
-        # print(dataset[0:10])
-        # print(f"Sample count after grouping: {len(dataset)}")
-        for i in range(0):
-            print(f"Example {i}:")
-            print(f"Token count: {len(dataset[i]["input_ids"])}")
-            for j in range(len(dataset[i]["input_ids"])):
-                id = dataset[i]["input_ids"][j]
-                token = tokenizer.decode(id, skip_special_tokens=False)
-                label = dataset[i]["labels"][j]
-                color = "green" if label != -100 else "red"
-                print(f"[{color}]{token}[/]", end="")
-        print()
+        chunk_text_preprocessor.report()
+        # visualize_rows(tokenizer, dataset[:3])
 
     if max_sample_count is not None:
         max_sample_count = min(len(dataset), max_sample_count)
         dataset = dataset.select(range(max_sample_count))
-    # print(
-    #     f"DATASET (PROCESSED): {split} column names after preprocessing: {dataset.column_names}"
-    # )
+
     total_token_count = sum(
         sum([1 if label != -100 else 0 for label in dataset[i]["labels"]])
         for i in range(len(dataset))
@@ -279,7 +268,7 @@ if __name__ == "__main__":
         "train",
         tokenizer=tokenizer,
         # max_sample_count=50,
-        # only_completion=True,
+        only_completion=True,
         chunk_size=256,
         load_from_cache_file=False,
     )

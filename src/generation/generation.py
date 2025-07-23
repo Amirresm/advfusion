@@ -1,19 +1,66 @@
 import os
+
+import torch
+
+from transformers.modeling_utils import PreTrainedModel
 from src.dataset.constants import TARGET_COLUMN, TEXT_COLUMN
+
 from src.evaluate.evaluate import calc_all_metrics
 
-import pprint
+
+def custom_generation_loop(model, tokenizer, sample_sent):
+    tokenized = tokenizer(
+        sample_sent,
+        return_tensors="pt",
+    )
+    sample_input = tokenized["input_ids"].to(model.device)
+    sample_attn = tokenized["attention_mask"].to(model.device)
+    print("Sample sentence:", sample_sent)
+    print("Sample input:", sample_input)
+    out_tokens = []
+    for i in range(10):
+        out = model(
+            input_ids=sample_input,
+            attention_mask=sample_attn,
+        )
+        logits = out.logits
+        next_token_logits = logits[:, -1, :]
+        next_token = torch.argmax(next_token_logits, dim=-1)
+        sample_input = torch.cat(
+            [sample_input, next_token.unsqueeze(0)],
+            dim=1,
+        )
+        sample_attn = torch.cat(
+            [sample_attn, torch.ones((1, 1), device=sample_input.device)],
+            dim=1,
+        )
+        next_token = next_token.item()
+        out_tokens.append(next_token)
+        token = tokenizer.decode(
+            next_token,
+            skip_special_tokens=True,
+        )
+        print(token, end="")
+
+    print("\nGenerated tokens:", out_tokens)
 
 
 def generate_raw_samples(
-    model, tokenizer, samples, batch_size=1, save_path=None
+    model: PreTrainedModel, tokenizer, samples, batch_size=1, save_path=None
 ):
+    if len(samples[TEXT_COLUMN]) == 0 or len(samples[TARGET_COLUMN]) == 0:
+        print("No samples to generate from.")
+        return
+
     input_column = TEXT_COLUMN
     target_column = TARGET_COLUMN
     if model.config.pad_token_id is None:
         print("Setting pad_token_id to eos_token_id")
         model.config.pad_token_id = tokenizer.eos_token_id
-    if model.generation_config.pad_token_id is None:
+    if (
+        model.generation_config is not None
+        and model.generation_config.pad_token_id is None
+    ):
         print("Setting generation_config.pad_token_id to eos_token_id")
         model.generation_config.pad_token_id = tokenizer.eos_token_id
 

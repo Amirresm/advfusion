@@ -18,7 +18,7 @@ class PeftConfigs:
 
 
 @dataclass
-class AdaptersConfigs:
+class AdaptersConfigsClass:
     SeqBn = adapters.SeqBnConfig()
     LoRA = adapters.LoRAConfig(
         r=8,
@@ -29,6 +29,9 @@ class AdaptersConfigs:
         output_lora=False,
         attn_matrices=["q", "v"],
     )
+
+
+AdaptersConfigs = AdaptersConfigsClass()
 
 
 def get_peft_config(peft_method: str, lib: Literal["peft", "adp"]):

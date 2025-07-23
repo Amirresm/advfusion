@@ -44,6 +44,7 @@ def get_trainer(
         save_strategy="steps",
         load_best_model_at_end=True,
         bf16=True,
+        label_names=["labels"]
     )
 
     TrainerClass = adapters.AdapterTrainer if peft_lib == "adp" else Trainer

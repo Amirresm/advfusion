@@ -1,56 +1,52 @@
-import torch
-
-
-def get_module_zeroer(device, adapter_name):
-    def set_module_zero(_, module):
+def get_module_modifier(device, adapter_name, freeze=False, zero=False):
+    def processor(_, module):
         if hasattr(module, "adapters") and adapter_name in module.adapters:
-            new_down = torch.nn.Linear(768, 48).to(device)
-            new_down.weight.data.fill_(0)
-            new_down.bias.data.fill_(0)
-            new_down.weight.requires_grad = False
-            new_down.bias.requires_grad = False
-            module.adapters[adapter_name].adapter_down[0] = new_down
-            new_up = torch.nn.Linear(48, 768).to(device)
-            new_up.weight.data.fill_(0)
-            new_up.bias.data.fill_(0)
-            new_up.weight.requires_grad = False
-            new_up.bias.requires_grad = False
-            module.adapters[adapter_name].adapter_up = new_up
+            if freeze:
+                module.adapters[adapter_name].adapter_down[
+                    0
+                ].weight.requires_grad = False
+                module.adapters[adapter_name].adapter_down[
+                    0
+                ].bias.requires_grad = False
 
-    return set_module_zero
+                module.adapters[
+                    adapter_name
+                ].adapter_up.weight.requires_grad = False
+                module.adapters[adapter_name].adapter_up.bias.requires_grad = (
+                    False
+                )
 
+            if zero:
+                module.adapters[adapter_name].adapter_down[0].weight.data.fill_(
+                    0
+                )
+                module.adapters[adapter_name].adapter_down[0].bias.data.fill_(0)
 
-def get_module_freezer(adapter_name):
-    def set_module_zero(_, module):
-        if hasattr(module, "adapters") and adapter_name in module.adapters:
-            module.adapters[adapter_name].adapter_down[
-                0
-            ].weight.requires_grad = False
-            module.adapters[adapter_name].adapter_down[
-                0
-            ].bias.requires_grad = False
-            module.adapters[adapter_name].adapter_up.weight.requires_grad = (
-                False
-            )
-            module.adapters[adapter_name].adapter_up.bias.requires_grad = False
+                module.adapters[adapter_name].adapter_up.weight.data.fill_(0)
+                module.adapters[adapter_name].adapter_up.bias.data.fill_(0)
 
-    return set_module_zero
+    return processor
 
 
-def zero_freeze_adapter(model, adapter_name, model_dtype):
-    set_module_zero = get_module_zeroer(model.device, adapter_name)
-    model.apply_to_adapter_layers(set_module_zero)
-    model.adapter_to(adapter_name, device=model.device, dtype=model_dtype)
-
-
-def freeze_adapter(model, adapter_name):
-    freeze_module = get_module_freezer(adapter_name)
-    model.apply_to_adapter_layers(freeze_module)
-
-
-def unfreeze_reload_adapter(model, path, name):
+def reload_adapter(model, adapter_path, adapter_name, dtype):
+    print(f"Reloading adapter {adapter_name} from {adapter_path}")
     model.load_adapter(
-        path,
-        load_as=name,
+        adapter_path,
+        load_as=adapter_name,
         set_active=True,
     )
+    model.adapter_to(adapter_name, device=model.device, dtype=dtype)
+
+
+def freeze_adapter(model, adapter_name, freeze=True):
+    processor = get_module_modifier(
+        model.device, adapter_name, freeze=freeze, zero=False
+    )
+    model.apply_to_adapter_layers(processor)
+
+
+def zero_adapter(model, adapter_name):
+    processor = get_module_modifier(
+        model.device, adapter_name, freeze=False, zero=True
+    )
+    model.apply_to_adapter_layers(processor)
