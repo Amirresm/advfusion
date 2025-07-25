@@ -1,6 +1,6 @@
 import adapters
 
-from src.model.model import ModelCategories
+from src.model.utils import ModelType
 
 CodeGemmaInterface = adapters.AdapterModelInterface(
     adapter_methods=["bottleneck", "lora", "reft", "invertible"],
@@ -39,10 +39,16 @@ Llama3Interface = adapters.AdapterModelInterface(
 )
 
 
-def get_adapter_interface(model_category: str):
-    if model_category == ModelCategories.GEMMA:
+def get_adapter_interface(model_category: ModelType):
+    if model_category == ModelType.CODELLAMA:
         return CodeGemmaInterface
-    elif model_category == ModelCategories.LLAMA3:
+    elif model_category in [
+        ModelType.LLAMA2,
+        ModelType.LLAMA3,
+        ModelType.CODELLAMA,
+    ]:
+        return Llama3Interface
+    elif model_category == ModelType.DEEPSEEK:
         return Llama3Interface
     else:
         return None

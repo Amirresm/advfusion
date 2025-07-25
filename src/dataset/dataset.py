@@ -1,14 +1,19 @@
+import json
 import os
 
 from datasets import DatasetDict, load_dataset
 from transformers.models.auto.tokenization_auto import AutoTokenizer
 from rich import print
 
-from src.dataset.custom_processors import RawPreprocessor, csn_processor
+from src.dataset.custom_processors import (
+    RawPreprocessor,
+    get_dataset_processor,
+)
 from src.dataset.processors import (
     ChunkTextPreprocessor,
     TokenizeTextPreprocessor,
 )
+from src.dataset.utils import DatasetType
 
 
 def visualize_rows(tokenizer, rows):
@@ -41,7 +46,7 @@ def get_raw_preprocessor(
 
 def load_raw_dataset(
     dataset_path: str,
-    raw_preprocessor: RawPreprocessor,
+    dataset_type: DatasetType,
     train_file: str | None = None,
     test_file: str | float = 0.2,
     validation_file: str | float = 0.5,
@@ -128,6 +133,7 @@ def load_raw_dataset(
             f"DATASET: After limiting, split '{split}' has {length:,} samples."
         )
 
+    raw_preprocessor = get_dataset_processor(dataset_type)
     for split, dataset in raw_dataset.items():
         raw_dataset[split] = dataset.map(
             get_raw_preprocessor(raw_preprocessor),
@@ -144,6 +150,7 @@ def preprocess_dataset(
     raw_dataset: DatasetDict,
     split: str,
     tokenizer,
+    output_dir: str,
     max_sample_count: int | None = None,
     batch_size: int = 32,
     only_completion: bool = False,
@@ -180,7 +187,7 @@ def preprocess_dataset(
         ],
         load_from_cache_file=load_from_cache_file,
     )
-    # visualize_rows(tokenizer, dataset[:3])
+    visualize_rows(tokenizer, dataset[:3])
 
     if do_chunk_text and chunk_size is not None:
         chunk_text_preprocessor = ChunkTextPreprocessor(chunk_size)
@@ -191,7 +198,7 @@ def preprocess_dataset(
             load_from_cache_file=load_from_cache_file,
         )
         chunk_text_preprocessor.report()
-        # visualize_rows(tokenizer, dataset[:3])
+        visualize_rows(tokenizer, dataset[:3])
 
     if max_sample_count is not None:
         max_sample_count = min(len(dataset), max_sample_count)
@@ -204,6 +211,19 @@ def preprocess_dataset(
     print(
         f"DATASET (PROCESSED): '{split}' total rows {len(dataset):,}, total token count: {total_token_count:,}"
     )
+
+    metadata = {
+        "split": split,
+        "max_sample_count": max_sample_count,
+        "chunk_size": chunk_size,
+        "text_max_length": text_max_length if not chunk_size else None,
+        "target_max_length": target_max_length if not chunk_size else None,
+        "only_completion": only_completion,
+        "total_token_count": total_token_count,
+    }
+
+    with open(os.path.join(output_dir, f"ds_{split}_metadata.json"), "w") as f:
+        json.dump(metadata, f, indent=4)
 
     return dataset
 
@@ -233,7 +253,7 @@ def pad_seq(
 
 if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(
-        "/home/amirreza/projects/ai/models/llm/codegemma-2b"
+        "/mnt/storage/ai/models/llm/codegemma-2b"
     )
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -243,19 +263,24 @@ if __name__ == "__main__":
     print(special_tokens)
 
     dataset_name_or_path = "~/projects/ai/data/CodeSearchNet/python"
+    dataset_name_or_path = "~/projects/ubc/ct_dataset/processed_data/rust"
     # dataset_name_or_path = "~/projects/ai/data/spp_30k/SPP_30k_verified.jsonl"
+
+    dataset_type = DatasetType.get_dataset_type(dataset_name_or_path)
+
+    print(f"Dataset type: {dataset_type}")
 
     raw_dataset = load_raw_dataset(
         dataset_name_or_path,
-        raw_preprocessor=csn_processor,
+        dataset_type=dataset_type,
         train_file="train.jsonl",
-        # test_file="test.jsonl",
+        test_file="test.jsonl",
         validation_file="valid.jsonl",
         # test_file=50,
         # validation_file=0,
-        max_train_samples=50,
-        max_validation_samples=5,
-        max_test_samples=100,
+        # max_train_samples=50,
+        # max_validation_samples=5,
+        # max_test_samples=100,
         load_from_cache_file=False,
     )
     # print(raw_dataset)
@@ -268,8 +293,8 @@ if __name__ == "__main__":
         "train",
         tokenizer=tokenizer,
         # max_sample_count=50,
-        only_completion=True,
-        chunk_size=256,
+        only_completion=False,
+        chunk_size=512,
         load_from_cache_file=False,
     )
     # eval_dataset = preprocess_dataset(

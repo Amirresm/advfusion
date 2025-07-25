@@ -1,17 +1,21 @@
+import os
 import evaluate
 
-bleu = evaluate.load("bleu")
-rouge = evaluate.load("rouge")
+hf_metrics_path = os.path.join(os.path.dirname(__file__), "hf_metrics")
+bleu = evaluate.load(os.path.join(hf_metrics_path, "bleu"))
+rouge = evaluate.load(os.path.join(hf_metrics_path, "rouge"))
 
 
 def calc_bleu(predictions, references):
-    results = bleu.compute(predictions=predictions, references=references, smooth=True)
-    return results
+    results = bleu.compute(
+        predictions=predictions, references=references, smooth=True
+    )
+    return results or {}
 
 
 def calc_rouge(predictions, references):
     results = rouge.compute(predictions=predictions, references=references)
-    return results
+    return results or {}
 
 
 def calc_all_metrics(predictions, references):
@@ -22,7 +26,16 @@ def calc_all_metrics(predictions, references):
         **{f"BLEU_{k}": v for k, v in bleu_score.items()},
         **{f"ROUGE_{k}": v for k, v in rouge_score.items()},
     }
-    return results
+    numeric_metrics = {}
+    for k, v in results.items():
+            try:
+                if isinstance(v, list):
+                    numeric_metrics[k] = [float(x) for x in v]
+                else:
+                    numeric_metrics[k] = float(v)
+            except:
+                numeric_metrics[k] = v
+    return numeric_metrics
 
 
 if __name__ == "__main__":

@@ -1,11 +1,39 @@
+from collections import defaultdict
+import json
 import os
 
 import torch
-
 from transformers.modeling_utils import PreTrainedModel
+from rich import print as rprint
+
 from src.dataset.constants import TARGET_COLUMN, TEXT_COLUMN
 
 from src.evaluate.evaluate import calc_all_metrics
+from src.utils.jsonl import write_jsonl
+
+
+def print_generation_result(row):
+    index = row["index"]
+    input = row["input"]
+    target = row["target"]
+    token_count = row["token_count"]
+    generation = row["generation"]
+    metrics = row["metrics"]
+    rprint(f"[red]{'-' * 20}Sample {index + 1}:[/red]")
+    rprint("[cyan]-------Input text:[/cyan]")
+    print(input)
+    rprint("[cyan]-------Target text:[/cyan]")
+    print(target)
+
+    rprint(f"[green]-------Generated text ({token_count} tokens):[/green]")
+    print(generation)
+
+    rprint("[green]-------Metrics:[/green]")
+    for k, v in metrics.items():
+        try:
+            rprint(f"{k}: {float(v):.5f}")
+        except:
+            rprint(f"{k}: {v}")
 
 
 def custom_generation_loop(model, tokenizer, sample_sent):
@@ -67,8 +95,11 @@ def generate_raw_samples(
     old_pad_side = tokenizer.padding_side
     tokenizer.padding_side = "left"
 
-    results = []
+    generations_path = f"{save_path}_samples.jsonl" if save_path else None
+    if generations_path and os.path.exists(generations_path):
+        os.remove(generations_path)
 
+    results = []
     batches = []
     for i in range(0, len(samples[input_column]), batch_size):
         batch = []
@@ -90,7 +121,7 @@ def generate_raw_samples(
         generations = model.generate(
             input_ids=tokenized["input_ids"].to(model.device),
             attention_mask=tokenized["attention_mask"].to(model.device),
-            max_new_tokens=256,
+            max_new_tokens=512,
             do_sample=False,
             temperature=None,
             top_k=None,
@@ -98,44 +129,42 @@ def generate_raw_samples(
         )
         prompt_length = len(tokenized["input_ids"][0])
         for i, gen in enumerate(generations):
-            print("=" * 50)
-            print(f"Sample {j * batch_size + i + 1}:")
+            index = j * batch_size + i
             input = batch[i][0]
             target = batch[i][1]
-            print("-" * 20, f"Input text:\n{input}")
-            print("-" * 20, f"Target text:\n{target}")
 
             new_tokens = gen
             new_tokens = new_tokens[prompt_length:]
             generation = tokenizer.decode(new_tokens, skip_special_tokens=True)
-            print(
-                "-" * 20,
-                f"Generated text ({len(new_tokens)} tokens):\n{generation}\n",
-            )
+            token_count = len(new_tokens)
 
             metrics = calc_all_metrics([generation], [target])
-            print("-" * 20, f"Metrics:")
-            for k, v in metrics.items():
-                try:
-                    print(f"{k}: {float(v):.5f}")
-                except:
-                    print(f"{k}: {v}")
 
-            numeric_metrics = {}
-            for k, v in metrics.items():
-                try:
-                    numeric_metrics[k] = float(v)
-                except:
-                    pass
+            result_row = {
+                "index": index,
+                "input": input,
+                "target": target,
+                "generation": generation,
+                "token_count": token_count,
+                "metrics": metrics,
+            }
+            results.append(result_row)
+            result_row = result_row.copy()
 
-            results.append(
-                {
-                    "input": input,
-                    "target": target,
-                    "generation": generation,
-                    "metrics": numeric_metrics,
-                }
-            )
+            pretty_metrics = {}
+            for k, v in metrics.items():
+                if type(v) is float:
+                    pretty_metrics[k] = f"{v:.5f}"
+                if type(v) is list:
+                    pretty_metrics[k] = [
+                        f"{x:.5f}" if type(x) is float else x for x in v
+                    ]
+                else:
+                    pretty_metrics[k] = str(v)
+            result_row["metrics"] = pretty_metrics
+            print_generation_result(result_row)
+            if generations_path is not None:
+                write_jsonl(generations_path, [result_row], append=True)
 
     if len(results) == 0:
         return
@@ -145,71 +174,31 @@ def generate_raw_samples(
         [r["target"] for r in results],
     )
 
-    averages = None
+    averages = defaultdict(float)
     for res in results:
-        if averages is None:
-            averages = res["metrics"].copy()
-        else:
-            for k, v in res["metrics"].items():
+        for k, v in res["metrics"].items():
+            if type(v) is float:
                 averages[k] += v
-    if averages is not None:
-        for k in averages:
-            averages[k] /= len(results)
-        print("-" * 20, f"Averages:")
-        averages_str = ""
-        for k, v in averages.items():
-            try:
-                averages += f"{k}: {float(v):.5f}\n"
-            except:
-                averages_str += f"{k}: {v}\n"
-        print(averages_str)
-        if save_path is not None:
-            file_path = f"{save_path}_averages.txt"
-            with open(file_path, "w") as f:
-                f.write(averages_str)
+    for k in averages:
+        averages[k] /= len(results)
+    averages = dict(averages)
 
-    print("-" * 20, f"Total metrics:")
-    total_metrics_str = ""
-    for k, v in total_metrics.items():
-        try:
-            total_metrics_str += f"{k}: {float(v):.5f}\n"
-        except:
-            total_metrics_str += f"{k}: {v}\n"
-    print(total_metrics_str)
+    rprint(f"\n[red]{'Metrics Summary':-^40}[/red]")
+    rprint("Total metrics:", total_metrics)
+    rprint("Averages:", averages)
+
+    metrics = {
+        "total_metrics": total_metrics,
+        "averages": averages,
+        "metadata": {
+            "batch_size": batch_size,
+            "num_samples": len(results),
+        },
+    }
+
     if save_path is not None:
-        file_path = f"{save_path}_total_metrics.txt"
+        file_path = f"{save_path}_metrics.json"
         with open(file_path, "w") as f:
-            f.write(total_metrics_str)
+            json.dump(metrics, f, indent=4)
 
     tokenizer.padding_side = old_pad_side
-    return
-
-    for i in range(len(samples["code"])):
-        print("=" * 50)
-        print(f"Sample {i + 1}:")
-        input = samples["code"][i]
-        target = samples["docstring"][i]
-        input = input.replace(target, "")
-        input = f"{input}\nExplanation:\n"
-        print("-" * 20, f"Input text:\n{input}")
-        print("-" * 20, f"Target text:\n{target}")
-        tokenized = tokenizer(
-            input,
-            return_tensors="pt",
-            padding=False,
-            truncation=True,
-            max_length=512,
-        )
-        prompt_length = len(tokenized["input_ids"][0])
-        generations = model.generate(
-            input_ids=tokenized["input_ids"].to(model.device),
-            attention_mask=tokenized["attention_mask"].to(model.device),
-            max_new_tokens=100,
-        )
-        new_tokens = generations[0][prompt_length:]
-
-        generation = tokenizer.decode(new_tokens, skip_special_tokens=False)
-        print(
-            "-" * 20,
-            f"Generated text ({len(new_tokens)} tokens):\n{generation}\n",
-        )

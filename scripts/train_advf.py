@@ -9,11 +9,13 @@ from src.advfusion.advfusion import (
     reload_advf_target_adapter,
 )
 from src.dataset.custom_processors import csn_processor
+from src.dataset.utils import DatasetType
 from src.generation.generation import generate_raw_samples
 from src.model.model import init_model, init_tokenizer
 from src.dataset.dataset import load_raw_dataset, preprocess_dataset
 from src.model.report import report_model
-from src.train.train import get_trainer
+from src.model.utils import ModelType
+from src.train.trainer import get_trainer
 
 
 def main():
@@ -22,6 +24,12 @@ def main():
         "model_name_or_path",
         type=str,
         help="Path to the model or model name.",
+    )
+    args.add_argument(
+        "--model_type",
+        type=str,
+        default=None,
+        help="Type of the model to use (e.g., 'llama-3', 'codellama'). Leave empty to auto-detect.",
     )
     args.add_argument(
         "--q",
@@ -55,6 +63,12 @@ def main():
         type=str,
         required=True,
         help="Path to the dataset or dataset name.",
+    )
+    args.add_argument(
+        "--dataset_type",
+        type=str,
+        default=None,
+        help="Type of the dataset to use (e.g., 'codesearchnet', 'codegeneration'). Leave empty to auto-detect.",
     )
     args.add_argument(
         "--train_file",
@@ -129,6 +143,17 @@ def main():
     except ValueError:
         pass
 
+    args.model_type = (
+        ModelType.get_model_type(args.model_name_or_path)
+        if args.model_type is None
+        else ModelType.get_model_type(args.model_type)
+    )
+    args.dataset_type = (
+        DatasetType.get_dataset_type(args.dataset_name_or_path)
+        if args.dataset_type is None
+        else DatasetType.get_dataset_type(args.dataset_type)
+    )
+
     output_dir = os.path.realpath(args.output_dir)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -141,7 +166,7 @@ def main():
 
     raw_dataset = load_raw_dataset(
         args.dataset_name_or_path,
-        raw_preprocessor=csn_processor,
+        dataset_type=args.dataset_type,
         train_file=args.train_file,
         test_file=args.test_file,
         validation_file=args.validation_file,
@@ -176,13 +201,12 @@ def main():
             dtype=model_dtype,
         )
 
-    report_model(model)
-
     train_dataset = preprocess_dataset(
         raw_dataset,
         "train",
         tokenizer=tokenizer,
-        only_completion=True,
+        output_dir=output_dir,
+        only_completion=False,
         chunk_size=args.chunk_size,
         load_from_cache_file=False,
     )
@@ -190,10 +214,11 @@ def main():
         raw_dataset,
         "validation",
         tokenizer=tokenizer,
+        output_dir=output_dir,
         only_completion=True,
         chunk_size=0,
-        text_max_length=256,
-        target_max_length=128,
+        text_max_length=512,
+        target_max_length=512,
         load_from_cache_file=False,
     )
 

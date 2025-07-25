@@ -10,14 +10,16 @@ from src.peft.adapters_interfaces import get_adapter_interface
 
 
 def setup_for_peft(
-    model, peft_lib: Literal["adp", "peft"], config, dtype=torch.bfloat16
+    model,
+    model_type,
+    peft_lib: Literal["adp", "peft"],
+    config,
+    dtype=torch.bfloat16,
 ):
     if peft_lib == "adp":
         print("Using adapters: Initializing adapters")
-        interface = get_adapter_interface(model.config.model_category)
-        print(
-            f"Initializing model adapters with interface for {model.config.model_category}."
-        )
+        interface = get_adapter_interface(model_type)
+        print(f"Initializing model adapters with interface for {model_type}.")
         adapters.init(model, interface=interface)
 
         adapter_name = f"adapter"
@@ -51,27 +53,31 @@ def setup_for_peft(
 
 def load_peft(
     model,
+    model_type,
     peft_lib: Literal["adp", "peft"],
     peft_path,
-    config,
     dtype=torch.bfloat16,
 ):
     adapter_name = f"adapter"
     if peft_lib == "adp":
         print("Using adapters: Initializing adapters")
-        interface = get_adapter_interface(model.config.model_category)
-        print(
-            f"Initializing model adapters with interface for {model.config.model_category}."
-        )
+        interface = get_adapter_interface(model_type)
+        print(f"Initializing model adapters with interface for {model_type}.")
         adapters.init(model, interface=interface)
-        # model.add_adapter(adapter_name, config=config)
-        model.load_adapter(
+        # model.load_adapter(
+        #     os.path.join(peft_path, adapter_name),
+        #     load_as=adapter_name,
+        #     set_active=True,
+        # )
+        # model.adapter_to(adapter_name, device=model.device, dtype=dtype)
+        # model.set_active_adapters(adapter_name)
+        # model.train_adapter(adapter_name, train_embeddings=True)
+        model.load_adapter_setup(
             os.path.join(peft_path, adapter_name),
-            load_as=adapter_name,
             set_active=True,
+            use_safetensors=True,
         )
         model.adapter_to(adapter_name, device=model.device, dtype=dtype)
-        model.set_active_adapters(adapter_name)
         model.train_adapter(adapter_name, train_embeddings=True)
 
         print("Adapter Config:", model.adapters_config.__dict__)
@@ -84,7 +90,7 @@ def load_peft(
             os.path.join(peft_path, adapter_name),
             adapter_name=adapter_name,
             is_trainable=True,
-            # torch_device=model.device,
+            torch_device=model.device,
         )
 
     return model

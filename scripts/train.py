@@ -3,14 +3,16 @@ import os
 
 import torch
 
-from src.dataset.custom_processors import csn_processor
+from src.dataset.custom_processors import csn_processor, ct_processor
+from src.dataset.utils import DatasetType
 from src.generation.generation import generate_raw_samples
 from src.model.model import init_model, init_tokenizer
 from src.dataset.dataset import load_raw_dataset, preprocess_dataset
 from src.model.report import report_model
+from src.model.utils import ModelType
 from src.peft.configs import get_peft_config
 from src.peft.peft import load_peft, setup_for_peft
-from src.train.train import get_trainer
+from src.train.trainer import get_trainer
 
 
 def main():
@@ -19,6 +21,12 @@ def main():
         "model_name_or_path",
         type=str,
         help="Path to the model or model name.",
+    )
+    args.add_argument(
+        "--model_type",
+        type=str,
+        default=None,
+        help="Type of the model to use (e.g., 'llama-3', 'codellama'). Leave empty to auto-detect.",
     )
     args.add_argument(
         "--q",
@@ -50,6 +58,12 @@ def main():
         type=str,
         required=True,
         help="Path to the dataset or dataset name.",
+    )
+    args.add_argument(
+        "--dataset_type",
+        type=str,
+        default=None,
+        help="Type of the dataset to use (e.g., 'codesearchnet', 'codegeneration'). Leave empty to auto-detect.",
     )
     args.add_argument(
         "--train_file",
@@ -116,6 +130,17 @@ def main():
     except ValueError:
         pass
 
+    args.model_type = (
+        ModelType.get_model_type(args.model_name_or_path)
+        if args.model_type is None
+        else ModelType.get_model_type(args.model_type)
+    )
+    args.dataset_type = (
+        DatasetType.get_dataset_type(args.dataset_name_or_path)
+        if args.dataset_type is None
+        else DatasetType.get_dataset_type(args.dataset_type)
+    )
+
     output_dir = os.path.realpath(args.output_dir)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -126,18 +151,9 @@ def main():
     )
     tokenizer = init_tokenizer(args.model_name_or_path, model)
 
-    print(
-        f"Tokenizer padding token: {tokenizer.pad_token} ({tokenizer.pad_token_id})"
-    )
-    print(f"Model padding token: {model.config.pad_token_id}")
-    print(
-        f"Tokenizer eos token: {tokenizer.eos_token} ({tokenizer.eos_token_id})"
-    )
-    print(f"Model eos token: {model.config.eos_token_id}")
-
     raw_dataset = load_raw_dataset(
         args.dataset_name_or_path,
-        raw_preprocessor=csn_processor,
+        dataset_type=args.dataset_type,
         train_file=args.train_file,
         test_file=args.test_file,
         validation_file=args.validation_file,
@@ -161,28 +177,31 @@ def main():
             peft_config = get_peft_config(args.peft, args.lib)
             model = load_peft(
                 model,
+                args.model_type,
                 peft_lib=args.lib,
                 peft_path=args.preload_peft_from,
-                config=peft_config,
                 dtype=model_dtype,
             )
         elif args.peft is not None:
             peft_config = get_peft_config(args.peft, args.lib)
             model = setup_for_peft(
-                model, args.lib, config=peft_config, dtype=model_dtype
+                model,
+                args.model_type,
+                args.lib,
+                config=peft_config,
+                dtype=model_dtype,
             )
         else:
             print(
                 "Warning: Peft library is specified but no PEFT config is provided."
             )
 
-    report_model(model)
-
     train_dataset = preprocess_dataset(
         raw_dataset,
         "train",
         tokenizer=tokenizer,
-        only_completion=True,
+        output_dir=output_dir,
+        only_completion=False,
         chunk_size=args.chunk_size,
         load_from_cache_file=False,
     )
@@ -190,10 +209,11 @@ def main():
         raw_dataset,
         "validation",
         tokenizer=tokenizer,
+        output_dir=output_dir,
         only_completion=True,
         chunk_size=0,
-        text_max_length=256,
-        target_max_length=128,
+        text_max_length=512,
+        target_max_length=512,
         load_from_cache_file=False,
     )
 
@@ -206,8 +226,8 @@ def main():
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
             output_dir=args.output_dir,
-            train_batch_size=4,
-            eval_batch_size=4,
+            train_batch_size=2,
+            eval_batch_size=2,
             epochs=1,
             logging_steps=100,
             eval_steps=200,
@@ -216,9 +236,7 @@ def main():
 
         save_path = os.path.join(args.output_dir, "adapter")
         if args.lib == "adp":
-            model.save_adapter(
-                save_path, "adapter"
-            )
+            model.save_adapter_setup(save_path, "adapter")
         else:
             model.save_pretrained(save_path)
 

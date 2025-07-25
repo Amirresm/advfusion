@@ -1,19 +1,10 @@
 from dataclasses import dataclass
+from enum import Enum
 
 import torch
 from transformers.models.auto.modeling_auto import AutoModelForCausalLM
 from transformers.models.auto.tokenization_auto import AutoTokenizer
 from transformers.utils.quantization_config import BitsAndBytesConfig
-
-
-@dataclass
-class ModelCategoryClass:
-    LLAMA3: str = "llama-3"
-    QWEN2_5: str = "qwen2.5"
-    GEMMA: str = "gemma"
-
-
-ModelCategories = ModelCategoryClass()
 
 
 def init_model(
@@ -50,22 +41,8 @@ def init_model(
     if model_dtype is None:
         model_dtype = model.dtype
 
-    model_cat = next(
-        (
-            cat
-            for cat in ModelCategories.__dict__.values()
-            if isinstance(cat, str) and cat in model_name_or_path.lower()
-        ),
-        None,
-    )
-    if model_cat is None:
-        raise ValueError(
-            f"Model category not recognized for {model_name_or_path}"
-        )
-
     model.config.model_name = model_name_or_path.split("/")[-1]
     model.config.model_path = model_name_or_path
-    model.config.model_category = model_cat
 
     return model, model_dtype
 
