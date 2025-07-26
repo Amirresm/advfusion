@@ -74,8 +74,22 @@ def custom_generation_loop(model, tokenizer, sample_sent):
 
 
 def generate_raw_samples(
-    model: PreTrainedModel, tokenizer, samples, batch_size=1, save_path=None
+    model: PreTrainedModel,
+    tokenizer,
+    raw_dataset,
+    num_samples,
+    batch_size,
+    max_new_tokens,
+    save_path=None,
 ):
+    if "test" not in raw_dataset or num_samples <= 0:
+        return
+    samples = (
+        raw_dataset["test"][:num_samples]
+        if num_samples > 0
+        else raw_dataset["test"]
+    )
+
     if len(samples[TEXT_COLUMN]) == 0 or len(samples[TARGET_COLUMN]) == 0:
         print("No samples to generate from.")
         return
@@ -121,7 +135,7 @@ def generate_raw_samples(
         generations = model.generate(
             input_ids=tokenized["input_ids"].to(model.device),
             attention_mask=tokenized["attention_mask"].to(model.device),
-            max_new_tokens=512,
+            max_new_tokens=max_new_tokens,
             do_sample=False,
             temperature=None,
             top_k=None,

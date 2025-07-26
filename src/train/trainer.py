@@ -2,23 +2,22 @@ from typing import Literal
 import adapters
 from adapters.trainer import TrainingArguments
 from transformers.data.data_collator import (
-    DataCollatorForLanguageModeling,
     DefaultDataCollator,
 )
 from transformers.trainer import Trainer
-from transformers.trainer_callback import ProgressCallback
 
 
 def get_trainer(
     model,
-    tokenizer,
-    peft_lib: Literal["adp", "peft"],
+    peft_lib: Literal["adp", "peft"] | None,
     train_dataset,
     eval_dataset,
     output_dir,
-    train_batch_size=4,
-    eval_batch_size=4,
-    epochs=1,
+    train_batch_size,
+    eval_batch_size,
+    epochs,
+    learning_rate,
+    warmup_ratio,
     logging_steps=100,
     eval_steps=500,
 ):
@@ -44,7 +43,7 @@ def get_trainer(
         save_strategy="steps",
         load_best_model_at_end=True,
         bf16=True,
-        label_names=["labels"]
+        label_names=["labels"],
     )
 
     TrainerClass = adapters.AdapterTrainer if peft_lib == "adp" else Trainer

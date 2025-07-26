@@ -1,5 +1,5 @@
 import os
-from typing import Literal
+from typing import Any, Literal
 
 import adapters
 import peft
@@ -15,7 +15,7 @@ def setup_for_peft(
     peft_lib: Literal["adp", "peft"],
     config,
     dtype=torch.bfloat16,
-):
+) -> Any:
     if peft_lib == "adp":
         print("Using adapters: Initializing adapters")
         interface = get_adapter_interface(model_type)
@@ -57,7 +57,7 @@ def load_peft(
     peft_lib: Literal["adp", "peft"],
     peft_path,
     dtype=torch.bfloat16,
-):
+) -> Any:
     adapter_name = f"adapter"
     if peft_lib == "adp":
         print("Using adapters: Initializing adapters")

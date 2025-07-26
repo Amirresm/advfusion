@@ -1,5 +1,5 @@
 [project]
-name = "advfusion-test"
+name = "advfusion"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -15,6 +15,7 @@ dependencies = [
     "peft>=0.16.0",
     "rich>=14.0.0",
     "rouge-score>=0.1.2",
+    "simple-parsing>=0.1.7",
     "torch>=2.7.1",
     "transformers>=4.51.3",
 ]

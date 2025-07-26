@@ -48,8 +48,8 @@ def load_raw_dataset(
     dataset_path: str,
     dataset_type: DatasetType,
     train_file: str | None = None,
-    test_file: str | float = 0.2,
-    validation_file: str | float = 0.5,
+    test_file: str | float | None = None,
+    validation_file: str | float | None = None,
     max_train_samples: int | None = None,
     max_validation_samples: int | None = None,
     max_test_samples: int | None = None,
@@ -67,7 +67,7 @@ def load_raw_dataset(
     if extention == "jsonl":
         extention = "json"
 
-    splits: list[tuple[str, str | float]] = [
+    splits: list[tuple[str, str | float | None]] = [
         ("train", train_file),
         ("test", test_file),
         ("validation", validation_file),
@@ -150,7 +150,7 @@ def preprocess_dataset(
     raw_dataset: DatasetDict,
     split: str,
     tokenizer,
-    output_dir: str,
+    output_dir: str | None = None,
     max_sample_count: int | None = None,
     batch_size: int = 32,
     only_completion: bool = False,
@@ -222,8 +222,11 @@ def preprocess_dataset(
         "total_token_count": total_token_count,
     }
 
-    with open(os.path.join(output_dir, f"ds_{split}_metadata.json"), "w") as f:
-        json.dump(metadata, f, indent=4)
+    if output_dir is not None:
+        with open(
+            os.path.join(output_dir, f"ds_{split}_metadata.json"), "w"
+        ) as f:
+            json.dump(metadata, f, indent=4)
 
     return dataset
 

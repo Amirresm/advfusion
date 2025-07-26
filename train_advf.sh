@@ -11,7 +11,7 @@ ${target_adapter_path},\
 
 python -m scripts.train_advf /home/amirreza/projects/ai/models/llm/Qwen2.5-Coder-1.5B \
 	--q 4bit \
-	--adapter_path_list "$adapter_path_list" \
+	--adapter_path_list $adapter_path_list \
 	--target_adapter_path "$target_adapter_path" \
 	--dataset_name_or_path /home/amirreza/projects/ai/data/CodeSearchNet/python \
 	--train_file train.jsonl \
