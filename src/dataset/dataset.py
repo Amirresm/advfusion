@@ -158,6 +158,7 @@ def preprocess_dataset(
     text_max_length: int | None = 256,
     target_max_length: int | None = 128,
     load_from_cache_file=True,
+    debug: bool = False,
 ):
     do_chunk_text = chunk_size is not None and chunk_size > 0
     if split not in raw_dataset:
@@ -187,8 +188,10 @@ def preprocess_dataset(
         ],
         load_from_cache_file=load_from_cache_file,
     )
-    visualize_rows(tokenizer, dataset[:3])
+    if debug:
+        visualize_rows(tokenizer, dataset[:3])
 
+    dropped_chunk_count = None
     if do_chunk_text and chunk_size is not None:
         chunk_text_preprocessor = ChunkTextPreprocessor(chunk_size)
         dataset = dataset.map(
@@ -198,7 +201,9 @@ def preprocess_dataset(
             load_from_cache_file=load_from_cache_file,
         )
         chunk_text_preprocessor.report()
-        visualize_rows(tokenizer, dataset[:3])
+        dropped_chunk_count = chunk_text_preprocessor.dropped_chunk_count
+        if debug:
+            visualize_rows(tokenizer, dataset[:3])
 
     if max_sample_count is not None:
         max_sample_count = min(len(dataset), max_sample_count)
@@ -219,6 +224,7 @@ def preprocess_dataset(
         "text_max_length": text_max_length if not chunk_size else None,
         "target_max_length": target_max_length if not chunk_size else None,
         "only_completion": only_completion,
+        "dropped_chunk_count": dropped_chunk_count,
         "total_token_count": total_token_count,
     }
 
@@ -299,6 +305,7 @@ if __name__ == "__main__":
         only_completion=False,
         chunk_size=512,
         load_from_cache_file=False,
+        debug=True,
     )
     # eval_dataset = preprocess_dataset(
     #     raw_dataset,

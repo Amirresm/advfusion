@@ -5,6 +5,7 @@ from src.model.utils import ModelType
 
 @dataclass
 class ModelArgs:
+    """Arguments for the model configuration."""
     model_name_or_path: str = field(
         metadata={
             "args": ["--model_name_or_path"],

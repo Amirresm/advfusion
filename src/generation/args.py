@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 @dataclass
 class GenArgs:
+    """Generation arguments."""
     do_generate: bool = True
 
     gen_batch_size: int = 4

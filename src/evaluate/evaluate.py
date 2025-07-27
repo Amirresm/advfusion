@@ -7,14 +7,20 @@ rouge = evaluate.load(os.path.join(hf_metrics_path, "rouge"))
 
 
 def calc_bleu(predictions, references):
-    results = bleu.compute(
-        predictions=predictions, references=references, smooth=True
-    )
+    try:
+        results = bleu.compute(
+            predictions=predictions, references=references, smooth=True
+        )
+    except:
+        results = {}
     return results or {}
 
 
 def calc_rouge(predictions, references):
-    results = rouge.compute(predictions=predictions, references=references)
+    try:
+        results = rouge.compute(predictions=predictions, references=references)
+    except:
+        results = {}
     return results or {}
 
 

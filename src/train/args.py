@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 @dataclass
 class TrainArgs:
+    """Training arguments for the model."""
     do_train: bool = False
     do_eval: bool = False
 

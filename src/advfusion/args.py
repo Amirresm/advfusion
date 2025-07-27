@@ -5,6 +5,7 @@ from simple_parsing import field
 
 @dataclass
 class AdvfArgs:
+    """AdvFusion arguments for loading and using adapters."""
     adapter_path_list: list[str] = field(
         required=True
     )  # List of adapter paths to load, separated by commas.

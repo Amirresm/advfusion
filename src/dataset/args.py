@@ -5,6 +5,7 @@ from src.dataset.utils import DatasetType
 
 @dataclass
 class DatasetArgs:
+    """Dataset arguments."""
     dataset_name_or_path: str = field(
         metadata={
             "help": "Path to the dataset or dataset name.",
@@ -69,6 +70,7 @@ class DatasetArgs:
             ),
         },
     )
+    train_completions_only: bool = False # Only calculate loss on completions, not on inputs.
 
     def __post_init__(self):
         try:

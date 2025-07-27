@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field
 from typing import Literal
 
-from simple_parsing import choice
-
 
 @dataclass
 class PeftArgs:
+    """Peft arguments for model fine-tuning."""
+
     lib: Literal["adp", "peft"] | None = field(
         metadata={
             "choices": ["adp", "peft"],

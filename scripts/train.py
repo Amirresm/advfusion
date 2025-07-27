@@ -19,10 +19,11 @@ from src.peft.configs import get_peft_config
 from src.peft.peft import load_peft, setup_for_peft
 from src.train.args import TrainArgs
 from src.train.trainer import get_trainer
+from src.utils.args import parse_args
 
 
 @dataclass
-class Args:
+class Args(simple_parsing.Serializable):
     model: ModelArgs
     peft: PeftArgs
     dataset: DatasetArgs
@@ -35,7 +36,7 @@ class Args:
 
 
 def main():
-    args = simple_parsing.parse(Args)
+    args = parse_args(Args)
     assert type(args.model.model_type) is ModelType
     assert type(args.dataset.dataset_type) is DatasetType
 
@@ -45,6 +46,9 @@ def main():
     results_dir = os.path.join(output_dir, "results")
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
+
+    with open(os.path.join(output_dir, "config.yaml"), "w") as f:
+        args.dump_yaml(f)
 
     model, model_dtype = init_model(
         args.model.model_name_or_path,
@@ -104,8 +108,8 @@ def main():
             raw_dataset,
             "train",
             tokenizer=tokenizer,
-            output_dir=output_dir,
-            only_completion=False,
+            output_dir=results_dir,
+            only_completion=args.dataset.train_completions_only,
             chunk_size=args.dataset.chunk_size,
             load_from_cache_file=False,
         )
@@ -115,7 +119,7 @@ def main():
             raw_dataset,
             "validation",
             tokenizer=tokenizer,
-            output_dir=output_dir,
+            output_dir=results_dir,
             only_completion=True,
             chunk_size=0,
             text_max_length=512,
@@ -128,7 +132,7 @@ def main():
             raw_dataset,
             "test",
             tokenizer=tokenizer,
-            output_dir=output_dir,
+            output_dir=results_dir,
             only_completion=True,
             chunk_size=0,
             text_max_length=512,

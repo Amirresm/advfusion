@@ -82,11 +82,11 @@ def generate_raw_samples(
     max_new_tokens,
     save_path=None,
 ):
-    if "test" not in raw_dataset or num_samples <= 0:
+    if "test" not in raw_dataset or num_samples is not None and num_samples <= 0:
         return
     samples = (
         raw_dataset["test"][:num_samples]
-        if num_samples > 0
+        if num_samples
         else raw_dataset["test"]
     )
 

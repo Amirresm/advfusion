@@ -22,10 +22,11 @@ from src.dataset.dataset import load_raw_dataset, preprocess_dataset
 from src.model.utils import ModelType
 from src.train.args import TrainArgs
 from src.train.trainer import get_trainer
+from src.utils.args import parse_args
 
 
 @dataclass
-class Args:
+class Args(simple_parsing.Serializable):
     model: ModelArgs
     advf: AdvfArgs
     dataset: DatasetArgs
@@ -38,7 +39,7 @@ class Args:
 
 
 def main():
-    args = simple_parsing.parse(Args)
+    args = parse_args(Args)
     assert type(args.model.model_type) is ModelType
     assert type(args.dataset.dataset_type) is DatasetType
 
@@ -99,8 +100,8 @@ def main():
             raw_dataset,
             "train",
             tokenizer=tokenizer,
-            output_dir=output_dir,
-            only_completion=False,
+            output_dir=results_dir,
+            only_completion=args.dataset.train_completions_only,
             chunk_size=args.dataset.chunk_size,
             load_from_cache_file=False,
         )
@@ -110,7 +111,7 @@ def main():
             raw_dataset,
             "validation",
             tokenizer=tokenizer,
-            output_dir=output_dir,
+            output_dir=results_dir,
             only_completion=True,
             chunk_size=0,
             text_max_length=512,
@@ -123,7 +124,7 @@ def main():
             raw_dataset,
             "test",
             tokenizer=tokenizer,
-            output_dir=output_dir,
+            output_dir=results_dir,
             only_completion=True,
             chunk_size=0,
             text_max_length=512,

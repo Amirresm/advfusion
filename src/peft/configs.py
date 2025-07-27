@@ -20,6 +20,7 @@ class PeftConfigs:
 @dataclass
 class AdaptersConfigsClass:
     SeqBn = adapters.SeqBnConfig()
+    SeqBnInv = adapters.SeqBnInvConfig()
     LoRA = adapters.LoRAConfig(
         r=8,
         alpha=16,
@@ -43,6 +44,8 @@ def get_peft_config(peft_method: str, lib: Literal["peft", "adp"]):
     elif lib == "adp":
         if peft_method == "seq_bn":
             return AdaptersConfigs.SeqBn
+        elif peft_method == "seq_bn_inv":
+            return AdaptersConfigs.SeqBnInv
         elif peft_method == "lora":
             return AdaptersConfigs.LoRA
         else:
