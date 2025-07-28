@@ -45,5 +45,5 @@ force the model type. See `src/model/utils.py` for model types.
 
 Supporting new datasets is a little more involved. You need to add your dataset
 type to `src/dataset/utils.py` and implement a custom row processor in
-`./src/dataset/custom_processors.py`. The row processor takes a row and returns
+`src/dataset/custom_processors.py`. The row processor takes a row and returns
 an 'input' and 'target' for the model.
