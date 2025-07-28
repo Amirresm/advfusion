@@ -28,7 +28,7 @@ def print_generation_result(row):
     rprint(f"[green]-------Generated text ({token_count} tokens):[/green]")
     print(generation)
 
-    rprint("[green]-------Metrics:[/green]")
+    rprint(f"[green]-------Metrics for {index + 1}:[/green]")
     for k, v in metrics.items():
         try:
             rprint(f"{k}: {float(v):.5f}")
@@ -144,7 +144,12 @@ def generate_raw_samples(
         prompt_length = len(tokenized["input_ids"][0])
         for i, gen in enumerate(generations):
             index = j * batch_size + i
-            input = batch[i][0]
+            # input = batch[i][0]
+            input_ids = tokenized["input_ids"][i]
+            input = tokenizer.decode(
+                input_ids,
+                skip_special_tokens=True,
+            )
             target = batch[i][1]
 
             new_tokens = gen

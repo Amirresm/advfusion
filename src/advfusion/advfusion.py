@@ -14,17 +14,21 @@ from rich import print
 
 
 def init_advfusion(
-    model, adapter_path_list, target_adapter_path, dtype=torch.bfloat16
+    model,
+    model_type,
+    adapter_path_list,
+    target_adapter_path,
+    dtype=torch.bfloat16,
 ):
-    interface = get_adapter_interface(model.config.model_category)
-    print(f"Initializing model adapters with interface for {model.config.model_category}.")
+    interface = get_adapter_interface(model_type)
+    print(f"Initializing model adapters with interface for {model_type}.")
     adapters.init(model, interface=interface)
 
     target_adapter_name = target_adapter_path.split("/")[-1]
     adapter_names = []
     for adapter_path in adapter_path_list:
         adapter_name = adapter_path.split("/")[-1]
-        path = os.path.join(adapter_path, "adapter")
+        path = os.path.join(adapter_path, "adapter", "adapter")
 
         adapter_names.append(adapter_name)
         model.load_adapter(
@@ -62,13 +66,13 @@ def init_advfusion(
 
 def load_advfusion(
     model,
-    adapter_path_list,
+    model_type,
     target_adapter_path,
     preload_path,
     dtype=torch.bfloat16,
 ):
-    interface = get_adapter_interface(model.config.model_category)
-    print(f"Initializing model adapters with interface for {model.config.model_category}.")
+    interface = get_adapter_interface(model_type)
+    print(f"Initializing model adapters with interface for {model_type}.")
     adapters.init(model, interface=interface)
 
     target_adapter_name = target_adapter_path.split("/")[-1]
@@ -107,7 +111,7 @@ def reload_advf_target_adapter(
     model, target_adapter_path, dtype=torch.bfloat16
 ):
     adapter_name = target_adapter_path.split("/")[-1]
-    path = os.path.join(target_adapter_path, "adapter")
+    path = os.path.join(target_adapter_path, "adapter", "adapter")
 
     reload_adapter(
         model,

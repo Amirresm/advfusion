@@ -67,6 +67,24 @@ def main():
         max_test_samples=args.dataset.max_test_samples,
     )
 
+    if args.advf.preload_advf_from is not None:
+        print(f"Loading AdvFusion model from {args.advf.preload_advf_from}")
+        fusion_name = load_advfusion(
+            model,
+            args.model.model_type,
+            target_adapter_path=args.advf.target_adapter_path,
+            preload_path=args.advf.preload_advf_from,
+            dtype=model_dtype,
+        )
+    else:
+        fusion_name = init_advfusion(
+            model,
+            args.model.model_type,
+            adapter_path_list=args.advf.adapter_path_list,
+            target_adapter_path=args.advf.target_adapter_path,
+            dtype=model_dtype,
+        )
+
     generate_raw_samples(
         model,
         tokenizer,
@@ -76,23 +94,6 @@ def main():
         max_new_tokens=args.gen.generate_max_new_tokens,
         save_path=os.path.join(results_dir, "pre_trained"),
     )
-
-    if args.advf.preload_advf_from is not None:
-        print(f"Loading AdvFusion model from {args.advf.preload_advf_from}")
-        fusion_name = load_advfusion(
-            model,
-            adapter_path_list=args.advf.adapter_path_list,
-            target_adapter_path=args.advf.target_adapter_path,
-            preload_path=args.advf.preload_advf_from,
-            dtype=model_dtype,
-        )
-    else:
-        fusion_name = init_advfusion(
-            model,
-            adapter_path_list=args.advf.adapter_path_list,
-            target_adapter_path=args.advf.target_adapter_path,
-            dtype=model_dtype,
-        )
 
     train_dataset = None
     if "train" in raw_dataset:
