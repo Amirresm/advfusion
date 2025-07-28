@@ -2,11 +2,12 @@
 
 lang="julia"
 
+model_path="/mnt/storage/ai/models/llm/deepseek-coder-1.3b-base"
 ds_path="/mnt/storage/ai/data/ct_dataset/${lang}"
 output_dir="results/deepseek-coder/${lang}"
 
 python -m scripts.train \
-	--model_name_or_path /mnt/storage/ai/models/llm/deepseek-coder-1.3b-base \
+	--model_name_or_path "${model_path}" \
 	--q "4bit" \
 	--lib "adp" \
 	--peft "seq_bn_inv" \
@@ -25,9 +26,3 @@ python -m scripts.train \
 	--eval_batch_size 4 \
 	--gen_pre_train_max_samples 0 \
 	--output_dir "${output_dir}"
-# --preload_peft_from "results/test" \
-# --preload_peft_from "results/qwen/ct_julia" \
-# --preload_peft_from "results/output_test" \
-#
-#
-# --dataset_name_or_path /home/amirreza/projects/ubc/ct_dataset/processed_data/julia \

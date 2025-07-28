@@ -4,11 +4,12 @@ langs=(
 	"r"
 )
 
+model_path="/mnt/storage/ai/models/llm/deepseek-coder-1.3b-base"
 for lang in "${langs[@]}"; do
 	ds_path="/mnt/storage/ai/data/ct_dataset/${lang}"
 	output_dir="results/deepseek-coder/${lang}"
 	python -m scripts.train \
-		--model_name_or_path /mnt/storage/ai/models/llm/deepseek-coder-1.3b-base \
+		--model_name_or_path "${model_path}" \
 		--q "4bit" \
 		--lib "adp" \
 		--peft "seq_bn_inv" \
