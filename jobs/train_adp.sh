@@ -10,11 +10,8 @@ if [[ "$MACHINE_NAME" == "voyager" ]]; then
 	IS_LOCAL=true
 fi
 
-
 if [[ "$IS_LOCAL" == true ]]; then
 	PROJECT_ROOT=$(dirname "$(dirname "$(realpath "$0")")")
-
-	source "$PROJECT_ROOT/.venv/bin/activate"
 	STORAGE_ROOT="/mnt/storage"
 	OUTPUT_DIR="$PROJECT_ROOT/results/jobs/train_adp"
 	mkdir -p "$OUTPUT_DIR"
@@ -56,7 +53,7 @@ else
 	pip install --no-index -r "$PROJECT_ROOT/requirements.txt"
 	pip install "$PROJECT_ROOT/adapters-1.2.0-py3-none-any.whl"
 
-	pip freeze > "$OUTPUT_DIR/requirements.txt"
+	pip freeze >"$OUTPUT_DIR/requirements.txt"
 fi
 
 echo "Starting job on '$MACHINE_NAME' at $(date) in project root: $PROJECT_ROOT"
