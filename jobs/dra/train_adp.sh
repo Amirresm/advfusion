@@ -25,12 +25,12 @@ python -m scripts.train \
 	--test_file test.jsonl \
 	--chunk_size 2048 \
 	--do_train \
+	--max_train_samples 99999999 \
+	--max_eval_samples 2000 \
+	--max_test_samples 4000 \
 	--train_completions_only \
 	--train_batch_size 2 \
 	--do_eval \
+	--gen_pre_train_max_samples 0 \
 	--eval_batch_size 4 \
 	--output_dir "${OUTPUT_DIR}"
-# --max_train_samples 1000 \
-# 	--max_eval_samples 20 \
-# 	--max_test_samples 20 \
-# --gen_pre_train_max_samples 0 \
