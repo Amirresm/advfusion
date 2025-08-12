@@ -8,9 +8,9 @@ source "$(dirname "$0")/_setup.sh"
 
 echo "Starting job on '$MACHINE' at $(date) in project root: $PROJECT_ROOT"
 
-lang="julia"
+lang="python"
 model_path="$STORAGE_ROOT/ai/models/llm/deepseek-coder-1.3b-base"
-ds_path="$STORAGE_ROOT/ai/data/ct_dataset/${lang}"
+ds_path="$STORAGE_ROOT/ai/data/CodeSearchNet/${lang}"
 
 python -m scripts.train \
 	--model_name_or_path "${model_path}" \
