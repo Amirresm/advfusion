@@ -6,6 +6,7 @@ from src.dataset.utils import DatasetType
 @dataclass
 class DatasetArgs:
     """Dataset arguments."""
+
     dataset_name_or_path: str = field(
         metadata={
             "help": "Path to the dataset or dataset name.",
@@ -70,7 +71,59 @@ class DatasetArgs:
             ),
         },
     )
-    train_completions_only: bool = False # Only calculate loss on completions, not on inputs.
+    train_completions_only: bool = (
+        False  # Only calculate loss on completions, not on inputs.
+    )
+
+    train_text_max_length: int = field(
+        default=512,
+        metadata={
+            "help": (
+                "Maximum length of the text input. If not provided, defaults to 512. Not used when chunk_size is set."
+            ),
+        },
+    )
+    train_target_max_length: int = field(
+        default=512,
+        metadata={
+            "help": (
+                "Maximum length of the target output. If not provided, defaults to 128. Not used when chunk_size is set."
+            ),
+        },
+    )
+
+    valid_text_max_length: int | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "Maximum length of the text input for validation. If not provided, defaults train_text_max_length."
+            ),
+        },
+    )
+    valid_target_max_length: int | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "Maximum length of the target output for validation. If not provided, defaults train_target_max_length."
+            ),
+        },
+    )
+    test_text_max_length: int | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "Maximum length of the text input for test. If not provided, defaults train_text_max_length."
+            ),
+        },
+    )
+    test_target_max_length: int | None = field(
+        default=None,
+        metadata={
+            "help": (
+                "Maximum length of the target output for test. If not provided, defaults train_target_max_length."
+            ),
+        },
+    )
 
     def __post_init__(self):
         try:

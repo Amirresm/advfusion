@@ -16,12 +16,12 @@ from src.dataset.processors import (
 from src.dataset.utils import DatasetType
 
 
-def visualize_rows(tokenizer, rows):
+def visualize_rows(tokenizer, rows, split):
     for i in range(len(rows["input_ids"])):
         input_ids = rows["input_ids"][i]
         labels = rows["labels"][i]
 
-        print(f"Example {i}:")
+        print(f"> Example {i}, split: {split}")
         print(f"Token count: {len(input_ids)}")
         for j in range(len(input_ids)):
             id = input_ids[j]
@@ -30,6 +30,7 @@ def visualize_rows(tokenizer, rows):
             color = "green" if label != -100 else "red"
             print(f"[{color}]{token}[/]", end="")
         print()
+        print("=" * 80)
 
 
 def get_raw_preprocessor(
@@ -142,7 +143,7 @@ def load_raw_dataset(
             remove_columns=dataset.column_names,
             load_from_cache_file=load_from_cache_file,
         )
-        print(f"DATASET: columns: {raw_dataset[split].column_names}")
+        print(f"DATASET: '{split}' columns: {raw_dataset[split].column_names}")
     return raw_dataset
 
 
@@ -189,7 +190,7 @@ def preprocess_dataset(
         load_from_cache_file=load_from_cache_file,
     )
     if debug:
-        visualize_rows(tokenizer, dataset[:3])
+        visualize_rows(tokenizer, dataset[:3], split)
 
     dropped_chunk_count = None
     if do_chunk_text and chunk_size is not None:
@@ -203,7 +204,7 @@ def preprocess_dataset(
         chunk_text_preprocessor.report()
         dropped_chunk_count = chunk_text_preprocessor.dropped_chunk_count
         if debug:
-            visualize_rows(tokenizer, dataset[:3])
+            visualize_rows(tokenizer, dataset[:3], split)
 
     if max_sample_count is not None:
         max_sample_count = min(len(dataset), max_sample_count)

@@ -12,6 +12,8 @@ class TrainArgs:
     epochs: int = 1
     learning_rate: float = 1e-4
     warmup_ratio: float = 0.03
+    eval_accumulation_steps: int = 50
+    gradient_accumulation_steps: int = 1
 
-    logging_steps: int = 100
-    eval_steps: int = 200
+    logging_steps: float = 0.05
+    eval_steps: float = 0.1

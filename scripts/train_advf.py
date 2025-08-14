@@ -104,7 +104,8 @@ def main():
             output_dir=results_dir,
             only_completion=args.dataset.train_completions_only,
             chunk_size=args.dataset.chunk_size,
-            load_from_cache_file=False,
+            text_max_length=args.dataset.train_text_max_length,
+            target_max_length=args.dataset.train_target_max_length,
         )
     eval_dataset = None
     if "validation" in raw_dataset:
@@ -115,9 +116,10 @@ def main():
             output_dir=results_dir,
             only_completion=True,
             chunk_size=0,
-            text_max_length=512,
-            target_max_length=512,
-            load_from_cache_file=False,
+            text_max_length=args.dataset.valid_text_max_length
+            or args.dataset.train_text_max_length,
+            target_max_length=args.dataset.valid_target_max_length
+            or args.dataset.train_target_max_length,
         )
     test_dataset = None
     if "test" in raw_dataset:
@@ -128,9 +130,10 @@ def main():
             output_dir=results_dir,
             only_completion=True,
             chunk_size=0,
-            text_max_length=512,
-            target_max_length=512,
-            load_from_cache_file=False,
+            text_max_length=args.dataset.test_text_max_length
+            or args.dataset.train_text_max_length,
+            target_max_length=args.dataset.test_target_max_length
+            or args.dataset.train_target_max_length,
         )
 
     if train_dataset and args.train.do_train:
@@ -148,6 +151,8 @@ def main():
             warmup_ratio=args.train.warmup_ratio,
             logging_steps=args.train.logging_steps,
             eval_steps=args.train.eval_steps,
+            eval_accumulation_steps=args.train.eval_accumulation_steps,
+            gradient_accumulation_steps=args.train.gradient_accumulation_steps,
         )
         trainer.train()
 

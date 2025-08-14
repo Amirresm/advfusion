@@ -18,31 +18,37 @@ def get_trainer(
     epochs,
     learning_rate,
     warmup_ratio,
-    logging_steps=100,
-    eval_steps=500,
+    logging_steps=0.05,
+    eval_steps=0.1,
+    eval_accumulation_steps=50,
+    gradient_accumulation_steps=1,
 ):
     data_collator = DefaultDataCollator()
 
     # callbacks = []
 
+    bf16 = model.config.torch_dtype == "bfloat16"
+    print(f"Using bf16: {bf16}")
+
     train_args = TrainingArguments(
         output_dir=output_dir,
         per_device_train_batch_size=train_batch_size,
         per_device_eval_batch_size=eval_batch_size,
+        gradient_accumulation_steps=gradient_accumulation_steps,
         num_train_epochs=epochs,
         lr_scheduler_type="constant",
         optim="paged_adamw_32bit",
-        warmup_ratio=0.03,
-        learning_rate=1e-4,
+        warmup_ratio=warmup_ratio,
+        learning_rate=learning_rate,
         logging_steps=logging_steps,
         eval_strategy="steps",
         eval_steps=eval_steps,
-        eval_accumulation_steps=50,
+        eval_accumulation_steps=eval_accumulation_steps,
         save_steps=eval_steps,
         save_total_limit=2,
         save_strategy="steps",
         load_best_model_at_end=True,
-        bf16=True,
+        bf16=model.config.torch_dtype == "bfloat16",
         label_names=["labels"],
     )
 

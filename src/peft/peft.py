@@ -37,7 +37,7 @@ def setup_for_peft(
         #     def forward(self, x): return super().forward(x).to(torch.float32)
         # model.lm_head = CastOutputToFloat(model.lm_head)
 
-        print("Adapter Config:", model.adapters_config.__dict__)
+        # print("Adapter Config:", model.adapters_config.__dict__)
         print("Active Adapters:", model.active_adapters)
         print(model.adapter_summary())
     elif peft_lib == "peft":

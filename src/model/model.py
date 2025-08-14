@@ -47,7 +47,7 @@ def init_model(
     return model, model_dtype
 
 
-def init_tokenizer(model_name_or_path, model):
+def init_tokenizer(model_name_or_path, model=None):
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
     if tokenizer.pad_token is None:
         pad_token = tokenizer.eos_token
@@ -59,13 +59,14 @@ def init_tokenizer(model_name_or_path, model):
         print(
             f"Setting pad token to {tokenizer.pad_token} ({tokenizer.pad_token_id})"
         )
-    model.config.pad_token_id = tokenizer.pad_token_id
     print(
         f"Tokenizer padding token: {tokenizer.pad_token} ({tokenizer.pad_token_id})"
     )
-    print(f"Model padding token: {model.config.pad_token_id}")
     print(
         f"Tokenizer eos token: {tokenizer.eos_token} ({tokenizer.eos_token_id})"
     )
-    print(f"Model eos token: {model.config.eos_token_id}")
+    if model is not None:
+        model.config.pad_token_id = tokenizer.pad_token_id
+        print(f"Model padding token: {model.config.pad_token_id}")
+        print(f"Model eos token: {model.config.eos_token_id}")
     return tokenizer
