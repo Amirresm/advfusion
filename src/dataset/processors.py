@@ -78,9 +78,9 @@ class TokenizeTextPreprocessor:
                 target_input_ids = target_tok["input_ids"][i]
                 target_attention_mask = target_tok["attention_mask"][i]
 
-                if target_input_ids[0] == tokenizer.bos_token_id:
-                    target_input_ids = target_input_ids[1:]
-                    target_attention_mask = target_attention_mask[1:]
+                # if target_input_ids[0] == tokenizer.bos_token_id:
+                #     target_input_ids = target_input_ids[1:]
+                #     target_attention_mask = target_attention_mask[1:]
 
                 input_ids = text_input_ids + target_input_ids
                 attention_mask = text_attention_mask + target_attention_mask

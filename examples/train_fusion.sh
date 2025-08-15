@@ -1,24 +1,21 @@
 #! /usr/bin/env bash
 
-target_adapter_path="results/deepseek-coder/lua"
-
 adapter_path_list=(
 	"results/deepseek-coder/rust"
 	"results/deepseek-coder/ruby"
 	"results/deepseek-coder/scala"
-	$target_adapter_path
+	"results/deepseek-coder/lua"
 )
 
 model_path="/mnt/storage/ai/models/llm/deepseek-coder-1.3b-base"
 ds_path="/mnt/storage/ai/data/ct_dataset/lua"
-output_dir="results/deepseek-coder_advf/lua"
+output_dir="results/deepseek-coder_fusion/lua"
 
 echo "Model Path: $model_path"
-python -m scripts.train_advf \
+python -m scripts.train_fusion \
 	--model_name_or_path "$model_path" \
 	--q 4bit \
 	--adapter_path_list "${adapter_path_list[@]}" \
-	--target_adapter_path "$target_adapter_path" \
 	--dataset_name_or_path "$ds_path" \
 	--train_file train.jsonl \
 	--validation_file valid.jsonl \
@@ -30,7 +27,7 @@ python -m scripts.train_advf \
 	--train_text_max_length 512 \
 	--train_target_max_length 512 \
 	--nodo_train \
-	--preload_advf_from "$output_dir" \
+	--preload_fusion_from "$output_dir" \
 	--train_completions_only False \
 	--train_batch_size 1 \
 	--gradient_accumulation_steps 1 \

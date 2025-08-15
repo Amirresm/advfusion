@@ -6,6 +6,11 @@ import torch
 import simple_parsing
 from rich import print as rprint
 
+from src.advfusion.advfusion import (
+    init_fusion,
+    load_fusion,
+)
+from src.advfusion.fusion_args import FusionArgs
 from src.dataset.args import DatasetArgs
 from src.dataset.utils import DatasetType
 from src.generation.args import GenArgs
@@ -14,9 +19,6 @@ from src.model.args import ModelArgs
 from src.model.model import init_model, init_tokenizer
 from src.dataset.dataset import load_raw_dataset, preprocess_dataset
 from src.model.utils import ModelType
-from src.peft.args import PeftArgs
-from src.peft.configs import get_peft_config
-from src.peft.peft import load_peft, setup_for_peft
 from src.train.args import TrainArgs
 from src.train.trainer import get_trainer
 from src.utils.args import parse_args
@@ -26,7 +28,7 @@ from src.utils.resource_logger import ResourceLogger
 @dataclass
 class Args(simple_parsing.Serializable):
     model: ModelArgs
-    peft: PeftArgs
+    fusion: FusionArgs
     dataset: DatasetArgs
     train: TrainArgs
     gen: GenArgs
@@ -63,6 +65,7 @@ def main():
         quantization_mode=args.model.q,
     )
     resource_logger.record_baseline()
+
     tokenizer = init_tokenizer(args.model.model_name_or_path, model)
 
     raw_dataset = load_raw_dataset(
@@ -75,6 +78,22 @@ def main():
         max_validation_samples=args.dataset.max_eval_samples,
         max_test_samples=args.dataset.max_test_samples,
     )
+
+    if args.fusion.preload_fusion_from is not None:
+        print(f"Loading Fusion model from {args.fusion.preload_fusion_from}")
+        fusion_name = load_fusion(
+            model,
+            args.model.model_type,
+            preload_path=args.fusion.preload_fusion_from,
+            dtype=model_dtype,
+        )
+    else:
+        fusion_name = init_fusion(
+            model,
+            args.model.model_type,
+            adapter_path_list=args.fusion.adapter_path_list,
+            dtype=model_dtype,
+        )
 
     if (args.gen.gen_pre_train_max_samples or 0) > 0:
         print("Generating raw samples before training...")
@@ -90,31 +109,6 @@ def main():
                 save_path=os.path.join(results_dir, "pre_trained"),
             )
             resource_logger.record("pre_trained_generate")
-
-    if args.peft.lib is not None and args.peft.peft_method is not None:
-        if args.peft.preload_peft_from is not None:
-            print(f"Loading PEFT model from {args.peft.preload_peft_from}")
-            peft_config = get_peft_config(args.peft.peft_method, args.peft.lib)
-            model = load_peft(
-                model,
-                args.model.model_type,
-                peft_lib=args.peft.lib,
-                peft_path=args.peft.preload_peft_from,
-                dtype=model_dtype,
-            )
-        elif args.peft.peft_method is not None:
-            peft_config = get_peft_config(args.peft.peft_method, args.peft.lib)
-            model = setup_for_peft(
-                model,
-                args.model.model_type,
-                args.peft.lib,
-                config=peft_config,
-                dtype=model_dtype,
-            )
-        else:
-            print(
-                "Warning: Peft library is specified but no PEFT config is provided."
-            )
 
     train_dataset = None
     if "train" in raw_dataset:
@@ -162,7 +156,7 @@ def main():
         print("Training the model...")
         trainer = get_trainer(
             model=model,
-            peft_lib=args.peft.lib,
+            peft_lib="adp",
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
             output_dir=output_dir,
@@ -181,11 +175,9 @@ def main():
         resource_logger.record("train")
         training_metrics["train"] = results.metrics
 
-        save_path = os.path.join(output_dir, "adapter")
-        if args.peft.lib == "adp":
-            model.save_adapter_setup(save_path, "adapter")
-        else:
-            model.save_pretrained(save_path)
+        fusion_path = os.path.join(args.output_dir, "adapter_fusion")
+        print(f"Saving adapter fusion to {fusion_path}")
+        model.save_adapter_setup(fusion_path, fusion_name)
 
         if args.train.do_eval:
             with torch.inference_mode():
@@ -219,6 +211,7 @@ def main():
         ) as f:
             json.dump(training_metrics, f, indent=4)
 
+    print("Generating samples after training...")
     with torch.inference_mode():
         resource_logger.clear_cuda()
         generate_raw_samples(

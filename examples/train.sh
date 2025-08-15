@@ -20,12 +20,14 @@ python -m scripts.train \
 	--max_test_samples 20 \
 	--do_train \
 	--notrain_completions_only \
-	--train_batch_size 2 \
+	--train_batch_size 4 \
 	--gradient_accumulation_steps 2 \
 	--chunk_size 0 \
 	--train_text_max_length 512 \
 	--train_target_max_length 256 \
 	--do_eval \
-	--eval_batch_size 4 \
+	--eval_batch_size 64 \
+	--eval_steps 100 \
 	--gen_pre_train_max_samples 0 \
+	--gen_batch_size 64 \
 	--output_dir "${output_dir}"

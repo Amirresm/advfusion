@@ -23,6 +23,7 @@ from src.model.utils import ModelType
 from src.train.args import TrainArgs
 from src.train.trainer import get_trainer
 from src.utils.args import parse_args
+from src.utils.resource_logger import ResourceLogger
 
 
 @dataclass
@@ -50,10 +51,21 @@ def main():
     if not os.path.exists(results_dir):
         os.makedirs(results_dir)
 
+    with open(os.path.join(output_dir, "config.yaml"), "w") as f:
+        args.dump_yaml(f)
+
+    resource_logger = ResourceLogger(
+        save_path=os.path.join(output_dir, "results", "resource_usage.json")
+    )
+    resource_logger.clear_cuda(hard=True)
+    resource_logger.record("init")
+
+    resource_logger.clear_cuda()
     model, model_dtype = init_model(
         args.model.model_name_or_path,
         quantization_mode=args.model.q,
     )
+    resource_logger.record_baseline()
     tokenizer = init_tokenizer(args.model.model_name_or_path, model)
 
     raw_dataset = load_raw_dataset(
@@ -85,15 +97,20 @@ def main():
             dtype=model_dtype,
         )
 
-    generate_raw_samples(
-        model,
-        tokenizer,
-        raw_dataset,
-        args.gen.gen_pre_train_max_samples,
-        batch_size=args.gen.gen_batch_size,
-        max_new_tokens=args.gen.generate_max_new_tokens,
-        save_path=os.path.join(results_dir, "pre_trained"),
-    )
+    if (args.gen.gen_pre_train_max_samples or 0) > 0:
+        print("Generating raw samples before training...")
+        with torch.inference_mode():
+            resource_logger.clear_cuda()
+            generate_raw_samples(
+                model,
+                tokenizer,
+                raw_dataset,
+                args.gen.gen_pre_train_max_samples,
+                batch_size=args.gen.gen_batch_size,
+                max_new_tokens=args.gen.generate_max_new_tokens,
+                save_path=os.path.join(results_dir, "pre_trained"),
+            )
+            resource_logger.record("pre_trained_generate")
 
     train_dataset = None
     if "train" in raw_dataset:
@@ -136,6 +153,7 @@ def main():
             or args.dataset.train_target_max_length,
         )
 
+    training_metrics = {}
     if train_dataset and args.train.do_train:
         print("Training the model...")
         trainer = get_trainer(
@@ -154,18 +172,25 @@ def main():
             eval_accumulation_steps=args.train.eval_accumulation_steps,
             gradient_accumulation_steps=args.train.gradient_accumulation_steps,
         )
-        trainer.train()
+        resource_logger.clear_cuda()
+        results_pre = trainer.train()
+        resource_logger.record("train_excluded")
+        training_metrics["train_excluded"] = results_pre.metrics
 
-        with torch.inference_mode():
-            generate_raw_samples(
-                model,
-                tokenizer,
-                raw_dataset,
-                args.gen.gen_pre_train_max_samples,
-                batch_size=args.gen.gen_batch_size,
-                max_new_tokens=args.gen.generate_max_new_tokens,
-                save_path=os.path.join(results_dir, "excluded"),
-            )
+        if (args.gen.gen_pre_train_max_samples or 0) > 0:
+            with torch.inference_mode():
+                print("Generating raw samples after excluded training...")
+                resource_logger.clear_cuda()
+                generate_raw_samples(
+                    model,
+                    tokenizer,
+                    raw_dataset,
+                    args.gen.gen_pre_train_max_samples,
+                    batch_size=args.gen.gen_batch_size,
+                    max_new_tokens=args.gen.generate_max_new_tokens,
+                    save_path=os.path.join(results_dir, "excluded"),
+                )
+                resource_logger.record("excluded_generate")
 
         reload_advf_target_adapter(
             model,
@@ -173,52 +198,52 @@ def main():
             dtype=model_dtype,
         )
         model.train_adapter_fusion(fusion_name)
-        trainer.train()
+        resource_logger.clear_cuda()
+        results = trainer.train()
+        resource_logger.record("train")
+        training_metrics["train"] = results.metrics
 
         fusion_path = os.path.join(args.output_dir, "adapter_fusion")
+        print(f"Saving adapter fusion to {fusion_path}")
         model.save_adapter_setup(fusion_path, fusion_name)
 
         if args.train.do_eval:
             with torch.inference_mode():
-                eval_results = {}
                 if eval_dataset:
                     print("Evaluating on the validation set...")
+                    resource_logger.clear_cuda()
                     eval_results = trainer.evaluate(
                         eval_dataset=eval_dataset,  # type: ignore
                         metric_key_prefix="eval",
                     )
+                    resource_logger.record("eval")
+                    training_metrics["eval"] = eval_results
 
-                test_results = {}
                 if test_dataset:
                     print("Evaluating on the test set...")
+                    resource_logger.clear_cuda()
                     test_results = trainer.evaluate(
                         eval_dataset=test_dataset,  # type: ignore
                         metric_key_prefix="test",
                     )
+                    resource_logger.record("test")
+                    training_metrics["test"] = test_results
 
-            rprint(f"Evaluation results:", eval_results)
-            rprint(f"Test results:", test_results)
-
-            evaluation_results = {
-                "eval": eval_results,
-                "test": test_results,
-            }
-            with open(
-                os.path.join(results_dir, "evaluation_results.json"),
-                "w",
-            ) as f:
-                json.dump(evaluation_results, f, indent=4)
     else:
-        with torch.inference_mode():
-            generate_raw_samples(
-                model,
-                tokenizer,
-                raw_dataset,
-                args.gen.gen_pre_train_max_samples,
-                batch_size=args.gen.gen_batch_size,
-                max_new_tokens=args.gen.generate_max_new_tokens,
-                save_path=os.path.join(results_dir, "excluded"),
-            )
+        if (args.gen.gen_pre_train_max_samples or 0) > 0:
+            with torch.inference_mode():
+                print("Generating raw samples after excluded training...")
+                resource_logger.clear_cuda()
+                generate_raw_samples(
+                    model,
+                    tokenizer,
+                    raw_dataset,
+                    args.gen.gen_pre_train_max_samples,
+                    batch_size=args.gen.gen_batch_size,
+                    max_new_tokens=args.gen.generate_max_new_tokens,
+                    save_path=os.path.join(results_dir, "excluded"),
+                )
+                resource_logger.record("excluded_generate")
 
         reload_advf_target_adapter(
             model,
@@ -226,7 +251,18 @@ def main():
             dtype=model_dtype,
         )
 
+    for split in training_metrics:
+        rprint(f"[bold green]Metrics for {split}:[/bold green]")
+        rprint(training_metrics[split])
+    if training_metrics:
+        with open(
+            os.path.join(results_dir, "evaluation_results.json"),
+            "w",
+        ) as f:
+            json.dump(training_metrics, f, indent=4)
+
     with torch.inference_mode():
+        resource_logger.clear_cuda()
         generate_raw_samples(
             model,
             tokenizer,
@@ -236,6 +272,9 @@ def main():
             max_new_tokens=args.gen.generate_max_new_tokens,
             save_path=os.path.join(results_dir, "fine_tuned"),
         )
+        resource_logger.record("generate")
+
+    resource_logger.print()
 
 
 if __name__ == "__main__":

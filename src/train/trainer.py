@@ -1,6 +1,7 @@
 from typing import Literal
 import adapters
 from adapters.trainer import TrainingArguments
+import torch
 from transformers.data.data_collator import (
     DefaultDataCollator,
 )
@@ -27,8 +28,8 @@ def get_trainer(
 
     # callbacks = []
 
-    bf16 = model.config.torch_dtype == "bfloat16"
-    print(f"Using bf16: {bf16}")
+    bf16 = model.config.torch_dtype == torch.bfloat16
+    print(f"Using bf16 for training: {bf16}")
 
     train_args = TrainingArguments(
         output_dir=output_dir,
@@ -48,7 +49,7 @@ def get_trainer(
         save_total_limit=2,
         save_strategy="steps",
         load_best_model_at_end=True,
-        bf16=model.config.torch_dtype == "bfloat16",
+        bf16=bf16,
         label_names=["labels"],
     )
 
