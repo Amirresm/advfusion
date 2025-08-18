@@ -23,6 +23,7 @@ def get_trainer(
     eval_steps=0.1,
     eval_accumulation_steps=50,
     gradient_accumulation_steps=1,
+    gradient_checkpointing=True,
 ):
     data_collator = DefaultDataCollator()
 
@@ -51,6 +52,7 @@ def get_trainer(
         load_best_model_at_end=True,
         bf16=bf16,
         label_names=["labels"],
+        gradient_checkpointing=gradient_checkpointing,
     )
 
     TrainerClass = adapters.AdapterTrainer if peft_lib == "adp" else Trainer

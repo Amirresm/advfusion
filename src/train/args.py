@@ -14,6 +14,7 @@ class TrainArgs:
     warmup_ratio: float = 0.03
     eval_accumulation_steps: int = 50
     gradient_accumulation_steps: int = 1
+    gradient_checkpointing: bool = True
 
     logging_steps: float = 0.05
     eval_steps: float = 0.1

@@ -169,6 +169,7 @@ def main():
             eval_steps=args.train.eval_steps,
             eval_accumulation_steps=args.train.eval_accumulation_steps,
             gradient_accumulation_steps=args.train.gradient_accumulation_steps,
+            gradient_checkpointing=args.train.gradient_checkpointing,
         )
         resource_logger.clear_cuda()
         results = trainer.train()
