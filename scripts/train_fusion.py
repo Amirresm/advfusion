@@ -156,6 +156,7 @@ def main():
         print("Training the model...")
         trainer = get_trainer(
             model=model,
+            tokenizer=tokenizer,
             peft_lib="adp",
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
@@ -170,6 +171,7 @@ def main():
             eval_accumulation_steps=args.train.eval_accumulation_steps,
             gradient_accumulation_steps=args.train.gradient_accumulation_steps,
             gradient_checkpointing=args.train.gradient_checkpointing,
+            max_length=args.dataset.train_max_length,
         )
         resource_logger.clear_cuda()
         results = trainer.train()

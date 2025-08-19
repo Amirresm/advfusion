@@ -8,27 +8,39 @@ source "$(dirname "$0")/_setup.sh"
 
 echo "Starting job on '$MACHINE' at $(date) in project root: $PROJECT_ROOT"
 
-lang="python"
-model_path="$STORAGE_ROOT/ai/models/llm/deepseek-coder-1.3b-base"
-ds_path="$STORAGE_ROOT/ai/data/CodeSearchNet/${lang}"
+OUTPUT_DIR="$PROJECT_ROOT/results/jobs/train_qwen32"
+mkdir -p "$OUTPUT_DIR"
+
+lang="julia"
+# model_path="$STORAGE_ROOT/ai/models/llm/deepseek-coder-1.3b-base"
+model_path="$STORAGE_ROOT/ai/models/llm/Qwen2.5-Coder-1.5B"
+# model_path="$STORAGE_ROOT/ai/models/llm/CodeLlama-7b"
+# ds_path="$STORAGE_ROOT/ai/data/CodeSearchNet/${lang}"
+ds_path="$STORAGE_ROOT/ai/data/ct_dataset/${lang}"
 
 python -m scripts.train \
 	--model_name_or_path "${model_path}" \
 	--q "4bit" \
 	--lib "adp" \
-	--peft "seq_bn_inv" \
+	--peft "seq_bn" \
 	--dataset_name_or_path "${ds_path}" \
 	--train_file train.jsonl \
 	--validation_file valid.jsonl \
 	--test_file test.jsonl \
-	--max_train_samples 1000 \
+	--max_train_samples 2000 \
 	--max_eval_samples 20 \
 	--max_test_samples 20 \
-	--chunk_size 512 \
+	--chunk_size 0 \
+	--train_text_max_length 1024 \
+	--train_target_max_length 1024 \
+	--train_max_length 2048 \
+	--train_completions_only False \
 	--do_train \
-	--train_completions_only \
+	--learning_rate 1e-4 \
 	--train_batch_size 2 \
 	--do_eval \
-	--eval_batch_size 4 \
+	--logging_steps 0.1 \
+	--eval_steps 0.95 \
+	--eval_batch_size 2 \
 	--gen_pre_train_max_samples 0 \
 	--output_dir "${OUTPUT_DIR}"

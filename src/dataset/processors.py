@@ -34,7 +34,7 @@ class TokenizeTextPreprocessor:
             if truncate:
                 text_tok = tokenizer(
                     examples[TEXT_COLUMN],
-                    padding="max_length",
+                    padding=False,
                     truncation=True,
                     max_length=text_max_length,
                     padding_side="left",
@@ -44,7 +44,7 @@ class TokenizeTextPreprocessor:
                         s + "\n" + tokenizer.eos_token
                         for s in examples[TARGET_COLUMN]
                     ],
-                    padding="max_length",
+                    padding=False,
                     truncation=True,
                     max_length=target_max_length,
                     padding_side="right",

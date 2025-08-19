@@ -1,6 +1,7 @@
-PROJECT_ROOT=$(dirname "$(dirname "$(realpath "$0")")")
+PROJECT_ROOT=$(realpath $0)
+PROJECT_ROOT="$(dirname "$PROJECT_ROOT")"
+PROJECT_ROOT="$(dirname "$PROJECT_ROOT")"
+PROJECT_ROOT="$(dirname "$PROJECT_ROOT")"
 STORAGE_ROOT="/mnt/storage"
-OUTPUT_DIR="$PROJECT_ROOT/results/jobs/train_adp"
-mkdir -p "$OUTPUT_DIR"
 
 MACHINE="LOCAL"
