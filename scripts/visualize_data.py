@@ -3,11 +3,13 @@ import os
 
 import simple_parsing
 from rich import print as rprint
+from torch.utils.data import DataLoader
 
 from src.dataset.args import DatasetArgs
 from src.dataset.utils import DatasetType
 from src.model.model import init_tokenizer
 from src.dataset.dataset import load_raw_dataset, preprocess_dataset
+from src.train.trainer import DataCollatorWithPaddingAndLabels
 from src.utils.args import parse_args
 
 
@@ -91,6 +93,40 @@ def main():
             or args.dataset.train_target_max_length,
             debug=True,
         )
+
+        data_collator_cpad = DataCollatorWithPaddingAndLabels(
+            tokenizer, max_length=args.dataset.train_max_length
+        )
+
+        if train_dataset:
+            dataloader = DataLoader(
+                train_dataset,
+                batch_size=2,
+                shuffle=False,
+                collate_fn=data_collator_cpad,
+            )
+
+            print("Visualizing training data")
+            for b, batch in enumerate(dataloader):
+                rprint("=" * 80 + f"Batch {b + 1}")
+                for i in range(len(batch["input_ids"])):
+                    input_ids = batch["input_ids"][i]
+                    attention_mask = batch["attention_mask"][i]
+                    labels = batch["labels"][i]
+                    for j in range(len(input_ids)):
+                        id = input_ids[j]
+                        token = tokenizer.decode(id, skip_special_tokens=False)
+                        label = labels[j]
+                        color = "green" if label != -100 else "red"
+                        rprint(f"[{color}]{token}[/]", end="")
+                    print()
+                    rprint(
+                        len(input_ids),
+                        len(attention_mask),
+                        len(labels),
+                    )
+                if b > 2:
+                    break
 
 
 if __name__ == "__main__":

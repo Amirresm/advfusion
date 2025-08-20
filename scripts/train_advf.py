@@ -123,6 +123,7 @@ def main():
             chunk_size=args.dataset.chunk_size,
             text_max_length=args.dataset.train_text_max_length,
             target_max_length=args.dataset.train_target_max_length,
+            debug=args.dataset.debug,
         )
     eval_dataset = None
     if "validation" in raw_dataset:
@@ -137,6 +138,7 @@ def main():
             or args.dataset.train_text_max_length,
             target_max_length=args.dataset.valid_target_max_length
             or args.dataset.train_target_max_length,
+            debug=args.dataset.debug,
         )
     test_dataset = None
     if "test" in raw_dataset:
@@ -151,6 +153,7 @@ def main():
             or args.dataset.train_text_max_length,
             target_max_length=args.dataset.test_target_max_length
             or args.dataset.train_target_max_length,
+            debug=args.dataset.debug,
         )
 
     training_metrics = {}
@@ -158,6 +161,7 @@ def main():
         print("Training the model...")
         trainer = get_trainer(
             model=model,
+            tokenizer=tokenizer,
             peft_lib="adp",
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
@@ -172,6 +176,7 @@ def main():
             eval_accumulation_steps=args.train.eval_accumulation_steps,
             gradient_accumulation_steps=args.train.gradient_accumulation_steps,
             gradient_checkpointing=args.train.gradient_checkpointing,
+            max_length=args.dataset.train_max_length,
         )
         resource_logger.clear_cuda()
         results_pre = trainer.train()

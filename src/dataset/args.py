@@ -75,20 +75,26 @@ class DatasetArgs:
         False  # Only calculate loss on completions, not on inputs.
     )
 
-    train_text_max_length: int = field(
-        default=512,
+    train_text_max_length: int | None = field(
+        default=None,
         metadata={
             "help": (
-                "Maximum length of the text input. If not provided, defaults to 512. Not used when chunk_size is set."
+                "Maximum length of the text input. Not used when chunk_size is set."
             ),
         },
     )
-    train_target_max_length: int = field(
-        default=512,
+    train_target_max_length: int | None = field(
+        default=None,
         metadata={
             "help": (
-                "Maximum length of the target output. If not provided, defaults to 128. Not used when chunk_size is set."
+                "Maximum length of the target output. Not used when chunk_size is set."
             ),
+        },
+    )
+    train_max_length: int | None = field(
+        default=None,
+        metadata={
+            "help": "Maximum length of the input sequence.",
         },
     )
 
@@ -124,6 +130,14 @@ class DatasetArgs:
             ),
         },
     )
+    debug: bool = field(
+        default=False,
+        metadata={
+            "help": (
+                "Enable debug mode for the dataset. This will load a small subset of the dataset for testing purposes."
+            ),
+        },
+    )
 
     def __post_init__(self):
         try:
@@ -142,4 +156,24 @@ class DatasetArgs:
         elif self.dataset_type is None:
             self.dataset_type = DatasetType.get_dataset_type(
                 self.dataset_name_or_path
+            )
+
+        if self.valid_text_max_length is None:
+            self.valid_text_max_length = self.train_text_max_length
+        if self.valid_target_max_length is None:
+            self.valid_target_max_length = self.train_target_max_length
+        if self.test_text_max_length is None:
+            self.test_text_max_length = self.train_text_max_length
+        if self.test_target_max_length is None:
+            self.test_target_max_length = self.train_target_max_length
+
+        if (
+            self.chunk_size is not None
+            and self.chunk_size > 0
+            and (
+                self.train_max_length is not None and self.train_max_length > 0
+            )
+        ):
+            raise ValueError(
+                "Cannot use both chunk_size and train_max_length. Please set only one of them."
             )

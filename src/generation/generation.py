@@ -129,8 +129,8 @@ def generate_raw_samples(
             [b[0] for b in batch],
             return_tensors="pt",
             padding="longest",
-            truncation=True,
-            max_length=512,
+            # truncation=True,
+            # max_length=512,
         )
         generations = model.generate(
             input_ids=tokenized["input_ids"].to(model.device),
