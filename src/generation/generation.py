@@ -5,6 +5,15 @@ import os
 import torch
 from transformers.modeling_utils import PreTrainedModel
 from rich import print as rprint
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 
 from src.dataset.constants import TARGET_COLUMN, TEXT_COLUMN
 
@@ -81,18 +90,42 @@ def generate_raw_samples(
     batch_size,
     max_new_tokens,
     save_path=None,
+    metadata_field_limit=100,
+    do_sample=False,
+    temperature: float | None = None,
+    top_k: int | None = None,
+    top_p: float | None = None,
+    n_per_sample: int = 1,
 ):
-    if "test" not in raw_dataset or num_samples is not None and num_samples <= 0:
+    if num_samples is not None and num_samples <= 0:
         return
+
+    target_split = (
+        "test" if "test" in raw_dataset else list(raw_dataset.keys())[0]
+    )
     samples = (
-        raw_dataset["test"][:num_samples]
+        raw_dataset[target_split][:num_samples]
         if num_samples
-        else raw_dataset["test"]
+        else raw_dataset[target_split][:]
     )
 
-    if len(samples[TEXT_COLUMN]) == 0 or len(samples[TARGET_COLUMN]) == 0:
+    if (
+        not samples
+        or len(samples[TEXT_COLUMN]) == 0
+        or len(samples[TARGET_COLUMN]) == 0
+    ):
         print("No samples to generate from.")
         return
+
+    if n_per_sample > 1:
+        for k, v in samples.items():
+            samples[k] = [item for item in v for _ in range(n_per_sample)]
+
+        samples["duplicate_index"] = [
+            i
+            for _ in range(len(next(iter(samples.values()))) // n_per_sample)
+            for i in range(n_per_sample)
+        ]
 
     input_column = TEXT_COLUMN
     target_column = TARGET_COLUMN
@@ -121,69 +154,106 @@ def generate_raw_samples(
             if i + j < len(samples[input_column]):
                 input = samples[input_column][i + j]
                 target = samples[target_column][i + j]
-                batch.append((input, target))
+                metadata = {
+                    k: (
+                        samples[k][i + j]
+                        if (
+                            not isinstance(samples[k][i + j], str)
+                            or len(samples[k][i + j]) < metadata_field_limit
+                        )
+                        else samples[k][i + j][: metadata_field_limit - 3]
+                        + "..."
+                    )
+                    for k in samples
+                    if k not in [input_column, target_column]
+                }
+                batch.append((input, target, metadata))
         batches.append(batch)
 
-    for j, batch in enumerate(batches):
-        tokenized = tokenizer(
-            [b[0] for b in batch],
-            return_tensors="pt",
-            padding="longest",
-            # truncation=True,
-            # max_length=512,
+    with Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+        auto_refresh=False,
+    ) as pbar:
+        total_samples = sum([len(b) for b in batches])
+        pbar_task = pbar.add_task(
+            f"Generating (bs={batch_size})", total=total_samples
         )
-        generations = model.generate(
-            input_ids=tokenized["input_ids"].to(model.device),
-            attention_mask=tokenized["attention_mask"].to(model.device),
-            max_new_tokens=max_new_tokens,
-            do_sample=False,
-            temperature=None,
-            top_k=None,
-            top_p=None,
-        )
-        prompt_length = len(tokenized["input_ids"][0])
-        for i, gen in enumerate(generations):
-            index = j * batch_size + i
-            # input = batch[i][0]
-            input_ids = tokenized["input_ids"][i]
-            input = tokenizer.decode(
-                input_ids,
-                skip_special_tokens=True,
+
+        for j, batch in enumerate(batches):
+            tokenized = tokenizer(
+                [b[0] for b in batch],
+                return_tensors="pt",
+                padding="longest",
+                # truncation=True,
+                # max_length=512,
             )
-            target = batch[i][1]
+            generations = model.generate(
+                input_ids=tokenized["input_ids"].to(model.device),
+                attention_mask=tokenized["attention_mask"].to(model.device),
+                max_new_tokens=max_new_tokens,
+                do_sample=do_sample,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+            )
+            prompt_length = len(tokenized["input_ids"][0])
+            for i, gen in enumerate(generations):
+                index = j * batch_size + i
+                # input = batch[i][0]
+                input_ids = tokenized["input_ids"][i]
+                input = tokenizer.decode(
+                    input_ids,
+                    skip_special_tokens=True,
+                )
+                target = batch[i][1]
+                metadata = batch[i][2]
 
-            new_tokens = gen
-            new_tokens = new_tokens[prompt_length:]
-            generation = tokenizer.decode(new_tokens, skip_special_tokens=True)
-            token_count = len(new_tokens)
+                new_tokens = gen
+                new_tokens = new_tokens[prompt_length:]
+                generation = tokenizer.decode(
+                    new_tokens, skip_special_tokens=True
+                )
+                token_count = len(new_tokens)
 
-            metrics = calc_all_metrics([generation], [target])
-
-            result_row = {
-                "index": index,
-                "input": input,
-                "target": target,
-                "generation": generation,
-                "token_count": token_count,
-                "metrics": metrics,
-            }
-            results.append(result_row)
-            result_row = result_row.copy()
-
-            pretty_metrics = {}
-            for k, v in metrics.items():
-                if type(v) is float:
-                    pretty_metrics[k] = f"{v:.5f}"
-                if type(v) is list:
-                    pretty_metrics[k] = [
-                        f"{x:.5f}" if type(x) is float else x for x in v
-                    ]
+                if target:
+                    metrics = calc_all_metrics([generation], [target])
                 else:
-                    pretty_metrics[k] = str(v)
-            result_row["metrics"] = pretty_metrics
-            print_generation_result(result_row)
-            if generations_path is not None:
-                write_jsonl(generations_path, [result_row], append=True)
+                    metrics = {}
+
+                result_row = {
+                    "index": index,
+                    "input": input,
+                    "target": target,
+                    "generation": generation,
+                    "token_count": token_count,
+                    "metrics": metrics,
+                }
+                results.append(result_row)
+                result_row = result_row.copy()
+
+                if metrics:
+                    pretty_metrics = {}
+                    for k, v in metrics.items():
+                        if type(v) is float:
+                            pretty_metrics[k] = f"{v:.5f}"
+                        if type(v) is list:
+                            pretty_metrics[k] = [
+                                f"{x:.5f}" if type(x) is float else x for x in v
+                            ]
+                        else:
+                            pretty_metrics[k] = str(v)
+                    result_row["metrics"] = pretty_metrics
+                print_generation_result(result_row)
+                result_row["metadata"] = metadata
+                if generations_path is not None:
+                    write_jsonl(generations_path, [result_row], append=True)
+            pbar.update(pbar_task, advance=len(batch))
+            pbar.refresh()
 
     if len(results) == 0:
         return

@@ -189,7 +189,7 @@ def preprocess_dataset(
         ],
         load_from_cache_file=load_from_cache_file,
     )
-    if debug:
+    if debug and len(dataset) > 0:
         visualize_rows(tokenizer, dataset[:2], split)
 
     dropped_chunk_count = None
@@ -203,7 +203,7 @@ def preprocess_dataset(
         )
         chunk_text_preprocessor.report()
         dropped_chunk_count = chunk_text_preprocessor.dropped_chunk_count
-        if debug:
+        if debug and len(dataset) > 0:
             visualize_rows(tokenizer, dataset[:2], split)
 
     if max_sample_count is not None:

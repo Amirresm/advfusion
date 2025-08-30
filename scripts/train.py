@@ -55,7 +55,7 @@ def main():
         save_path=os.path.join(output_dir, "results", "resource_usage.json")
     )
     resource_logger.clear_cuda(hard=True)
-    resource_logger.record("init")
+    resource_logger.record("init", current=True)
 
     resource_logger.clear_cuda()
     model, model_dtype = init_model(
@@ -74,6 +74,7 @@ def main():
         max_train_samples=args.dataset.max_train_samples,
         max_validation_samples=args.dataset.max_eval_samples,
         max_test_samples=args.dataset.max_test_samples,
+        load_from_cache_file=False,
     )
 
     if (args.gen.gen_pre_train_max_samples or 0) > 0:
@@ -87,6 +88,11 @@ def main():
                 args.gen.gen_pre_train_max_samples,
                 batch_size=args.gen.gen_batch_size,
                 max_new_tokens=args.gen.generate_max_new_tokens,
+                do_sample=args.gen.gen_do_sample,
+                temperature=args.gen.gen_temperature,
+                top_k=args.gen.gen_top_k,
+                top_p=args.gen.gen_top_p,
+                n_per_sample=args.gen.gen_n_per_sample,
                 save_path=os.path.join(results_dir, "pre_trained"),
             )
             resource_logger.record("pre_trained_generate")
@@ -128,6 +134,7 @@ def main():
             text_max_length=args.dataset.train_text_max_length,
             target_max_length=args.dataset.train_target_max_length,
             debug=args.dataset.debug,
+            load_from_cache_file=False,
         )
     eval_dataset = None
     if "validation" in raw_dataset:
@@ -143,6 +150,7 @@ def main():
             target_max_length=args.dataset.valid_target_max_length
             or args.dataset.train_target_max_length,
             debug=args.dataset.debug,
+            load_from_cache_file=False,
         )
     test_dataset = None
     if "test" in raw_dataset:
@@ -158,6 +166,7 @@ def main():
             target_max_length=args.dataset.test_target_max_length
             or args.dataset.train_target_max_length,
             debug=args.dataset.debug,
+            load_from_cache_file=False,
         )
 
     training_metrics = {}
@@ -234,9 +243,51 @@ def main():
             args.gen.gen_post_train_max_samples,
             batch_size=args.gen.gen_batch_size,
             max_new_tokens=args.gen.generate_max_new_tokens,
+            do_sample=args.gen.gen_do_sample,
+            temperature=args.gen.gen_temperature,
+            top_k=args.gen.gen_top_k,
+            top_p=args.gen.gen_top_p,
+            n_per_sample=args.gen.gen_n_per_sample,
             save_path=os.path.join(results_dir, "fine_tuned"),
         )
         resource_logger.record("generate")
+
+    if (
+        args.gen.benchmark_dataset_name_or_path is not None
+        and args.gen.benchmark_dataset_type is not None
+    ):
+        print("Generating raw samples on the benchmark dataset...")
+        additional_raw_dataset = load_raw_dataset(
+            args.gen.benchmark_dataset_name_or_path,
+            dataset_type=args.gen.benchmark_dataset_type,
+            # max_train_samples=args.gen.gen_post_train_max_samples,
+            # max_validation_samples=args.gen.gen_post_train_max_samples,
+            # max_test_samples=args.gen.gen_post_train_max_samples,
+            # load_from_cache_file=False,
+        )
+        task_name = args.gen.benchmark_dataset_name_or_path.split("/")[-1]
+        task_name = task_name.split(".")[0]
+        with torch.inference_mode():
+            resource_logger.clear_cuda()
+            generate_raw_samples(
+                model,
+                tokenizer,
+                additional_raw_dataset,
+                num_samples=args.gen.gen_post_train_max_samples,
+                batch_size=args.gen.gen_batch_size,
+                max_new_tokens=args.gen.generate_max_new_tokens,
+                do_sample=args.gen.benchmark_do_sample,
+                temperature=args.gen.benchmark_temperature,
+                top_k=args.gen.benchmark_top_k,
+                top_p=args.gen.benchmark_top_p,
+                n_per_sample=args.gen.benchmark_n_per_sample,
+                save_path=os.path.join(
+                    results_dir,
+                    f"bench_{task_name}",
+                ),
+                metadata_field_limit=99999,
+            )
+            resource_logger.record(f"generate_bench_{task_name}")
 
     resource_logger.print()
 
