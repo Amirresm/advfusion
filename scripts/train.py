@@ -74,7 +74,6 @@ def main():
         max_train_samples=args.dataset.max_train_samples,
         max_validation_samples=args.dataset.max_eval_samples,
         max_test_samples=args.dataset.max_test_samples,
-        load_from_cache_file=False,
     )
 
     if (args.gen.gen_pre_train_max_samples or 0) > 0:
@@ -134,7 +133,6 @@ def main():
             text_max_length=args.dataset.train_text_max_length,
             target_max_length=args.dataset.train_target_max_length,
             debug=args.dataset.debug,
-            load_from_cache_file=False,
         )
     eval_dataset = None
     if "validation" in raw_dataset:
@@ -150,7 +148,6 @@ def main():
             target_max_length=args.dataset.valid_target_max_length
             or args.dataset.train_target_max_length,
             debug=args.dataset.debug,
-            load_from_cache_file=False,
         )
     test_dataset = None
     if "test" in raw_dataset:
@@ -166,7 +163,6 @@ def main():
             target_max_length=args.dataset.test_target_max_length
             or args.dataset.train_target_max_length,
             debug=args.dataset.debug,
-            load_from_cache_file=False,
         )
 
     training_metrics = {}

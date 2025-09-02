@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
 
-#SBATCH --time=18:00:00
+#SBATCH --time=24:00:00
 #SBATCH --account=rrg-fard
 #SBATCH --mem-per-cpu=16000M
 #SBATCH --gpus-per-node=1
 #SBATCH --output=O-%x.%j.out
 
-echo $SLURM_TMPDIR
-pwd
+echo "TMP DIR: ${SLURM_TMPDIR}"
+echo "PWD: ${PWD}"
+echo "HOST: $(hostname)"
+echo "ls, ls .., ls ../.."
 ls
 ls ..
 ls ../..
+echo "End of debug info"
 
 PROJECT_ROOT="/home/amirresm/files/advfusion"
 cd "$PROJECT_ROOT"
