@@ -11,6 +11,28 @@ class RawRow(TypedDict):
 type RawPreprocessor = Callable[[dict[str, list]], RawRow]
 
 
+def ct_bench_processor(example: dict) -> RawRow:
+    """Code translation dataset processor."""
+    prompts = []
+    targets = []
+    for i in range(len(example["id"])):
+        source_lang = example["source_lang"][i]
+        target_lang = example["target_lang"][i]
+
+        prompt = example["source_content"][i]
+        target = example["target_content"][i]
+
+        prompt = f"### Code written in {source_lang}:\n{prompt}\n### Code written in {target_lang}:\n"
+        prompt = prompt + example["prompt"][i]
+        prompts.append(prompt)
+        targets.append(target)
+
+    return {
+        "TEXT": prompts,
+        "TARGET": targets,
+    }
+
+
 def ct_processor(example: dict) -> RawRow:
     """Code translation dataset processor."""
     prompts = []
@@ -78,5 +100,7 @@ def get_dataset_processor(dataset_type: DatasetType) -> RawPreprocessor:
         return code_gen_processor
     elif dataset_type == DatasetType.CodeTranslation:
         return ct_processor
+    elif dataset_type == DatasetType.CodeTranslationBench:
+        return ct_bench_processor
     else:
         raise ValueError(f"Unsupported dataset type: {dataset_type}")

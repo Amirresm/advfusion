@@ -5,6 +5,7 @@ class DatasetType(Enum):
     CodeSearchNet = "codesearchnet"
     CodeGeneration = "codegeneration"
     CodeTranslation = "ct_dataset"
+    CodeTranslationBench = "ct_bench_dataset"
 
     @classmethod
     def get_dataset_type(cls, dataset_name_or_path: str) -> "DatasetType":
